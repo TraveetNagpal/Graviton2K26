@@ -1,7 +1,7 @@
 import { useState, type FormEvent, type CSSProperties } from 'react';
 import { useExplorerStore } from '@/store';
 import type { MapLayer } from '@/types';
-import { authenticate, downloadReportFile, generateReport, saveDownload } from '@/modules/reports/api';
+import { downloadReportFile, generateReport, saveDownload } from '@/modules/reports/api';
 import styles from './AnalysisWorkflow.module.css';
 
 const API = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '').replace(/\/v1$/, '');
@@ -17,9 +17,7 @@ function resolveApiPath(path: string): string {
 }
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const token = window.localStorage.getItem('terramind_access_token');
   const headers = new Headers(init?.headers);
-  if (token) headers.set('Authorization', `Bearer ${token}`);
   const retryable = !init?.method || init.method === 'GET';
   for (let attempt = 0; ; attempt++) {
     const response = await fetch(url, { ...init, headers });
@@ -49,10 +47,6 @@ export default function AnalysisWorkflow() {
   const [busy, setBusy] = useState(false);
   const [question, setQuestion] = useState('How has vegetation changed?');
   const [interpretation, setInterpretation] = useState('');
-  const [signedIn, setSignedIn] = useState(() => Boolean(window.localStorage.getItem('terramind_access_token')));
-  const [authEmail, setAuthEmail] = useState('');
-  const [authPassword, setAuthPassword] = useState('');
-  const [registering, setRegistering] = useState(false);
 
   const geometry = selection?.geometry;
   const canSearch = geometry?.type === 'Polygon' && Boolean(start) && Boolean(end) && end > start;
@@ -60,20 +54,7 @@ export default function AnalysisWorkflow() {
   function reportError(e: unknown, fallback: string) {
     const message = e instanceof Error ? e.message : fallback;
     setError(message);
-    if (/bearer token|invalid or expired/i.test(message)) setSignedIn(false);
     return message;
-  }
-
-  async function onSignIn(event: FormEvent) {
-    event.preventDefault();
-    setBusy(true); setError('');
-    try {
-      await authenticate(authEmail.trim(), authPassword, registering);
-      setSignedIn(true); setAuthPassword('');
-      setStatus(registering ? 'Account created. Search the catalog to begin.' : 'Signed in. Search the catalog to begin.');
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Sign-in failed.');
-    } finally { setBusy(false); }
   }
 
   async function onSearch(event: FormEvent) {
@@ -145,21 +126,13 @@ export default function AnalysisWorkflow() {
     if (!analysisId) return;
     setBusy(true); setError('');
     try { const generated = await generateReport(analysisId, 'Vegetation change analysis'); saveDownload(await downloadReportFile(generated.report.id, 'pdf'), `${generated.report.id}.pdf`); }
-    catch (e) { reportError(e, 'Report generation/download failed. Sign in from Reports and retry.'); }
+    catch (e) { reportError(e, 'Report generation/download failed. Try again.'); }
     finally { setBusy(false); }
   }
 
   return <aside className={styles.panel} aria-label="Satellite analysis workflow">
     <strong style={{ fontSize: 14 }}>Satellite change analysis</strong>
     <p style={{ color: '#a2a5ab', margin: '4px 0 10px' }}>{selection ? 'Selected geometry is sent as WGS84 GeoJSON.' : 'Draw a polygon on the map to begin.'}</p>
-
-    {!signedIn && <form onSubmit={onSignIn} style={{ display: 'grid', gap: 7, paddingBottom: 10, marginBottom: 10, borderBottom: '1px solid rgba(255,255,255,.14)' }}>
-      <p style={{ margin: 0, color: '#e6c17a' }}>{registering ? 'Create an account (password 12+ characters) to run analyses.' : 'Sign in to run satellite analyses.'}</p>
-      <input type="email" required autoComplete="email" placeholder="Email address" value={authEmail} onChange={e => setAuthEmail(e.target.value)} style={field} />
-      <input type="password" required minLength={12} autoComplete={registering ? 'new-password' : 'current-password'} placeholder="Password (12+ characters)" value={authPassword} onChange={e => setAuthPassword(e.target.value)} style={field} />
-      <button disabled={busy} style={button}>{busy ? 'Working…' : registering ? 'Create account and sign in' : 'Sign in'}</button>
-      <button type="button" onClick={() => setRegistering(v => !v)} style={linkButton}>{registering ? 'Already have an account? Sign in' : 'New here? Create an account'}</button>
-    </form>}
 
     <form onSubmit={onSearch} style={{ display: 'grid', gap: 8 }}>
       <label>Dataset<select value={dataset} onChange={e => setDataset(e.target.value)} style={field}><option value="sentinel-2">Sentinel-2</option><option value="landsat-8">Landsat 8</option><option value="landsat-9">Landsat 9</option><option value="landsat">Landsat (all)</option></select></label>
@@ -173,7 +146,7 @@ export default function AnalysisWorkflow() {
     {error && <p role="alert" style={{ color: '#e88989', marginTop: 8 }}>{error}</p>}
     {analysisId && <small style={{ color: '#a2a5ab' }}>Analysis ID: {analysisId}</small>}
 
-    {observations.length > 0 && <form onSubmit={onAnalyze} style={{ display: 'grid', gap: 7, marginTop: 11, borderTop: '1px solid rgba(255,255,255,.14)', paddingTop: 10 }}><label>Earlier observation<select value={earlier} onChange={e => setEarlier(e.target.value)} style={field}>{observations.map(o => <option key={o.image_id} value={o.image_id}>{o.date} · {o.cloud_cover == null ? 'cloud n/a' : `${o.cloud_cover}% cloud`}</option>)}</select></label><label>Later observation<select value={later} onChange={e => setLater(e.target.value)} style={field}>{observations.map(o => <option key={o.image_id} value={o.image_id}>{o.date} · {o.cloud_cover == null ? 'cloud n/a' : `${o.cloud_cover}% cloud`}</option>)}</select></label><button disabled={busy || observations.length < 2} style={button}>{busy ? 'Working…' : 'Run vegetation analysis'}</button>{observations.length < 2 && <small style={{ color: '#e6c17a' }}>At least two observations are required. Widen the date range or raise the cloud limit.</small>}{!signedIn && <small style={{ color: '#e6c17a' }}>Sign in above to run the analysis.</small>}</form>}
+    {observations.length > 0 && <form onSubmit={onAnalyze} style={{ display: 'grid', gap: 7, marginTop: 11, borderTop: '1px solid rgba(255,255,255,.14)', paddingTop: 10 }}><label>Earlier observation<select value={earlier} onChange={e => setEarlier(e.target.value)} style={field}>{observations.map(o => <option key={o.image_id} value={o.image_id}>{o.date} · {o.cloud_cover == null ? 'cloud n/a' : `${o.cloud_cover}% cloud`}</option>)}</select></label><label>Later observation<select value={later} onChange={e => setLater(e.target.value)} style={field}>{observations.map(o => <option key={o.image_id} value={o.image_id}>{o.date} · {o.cloud_cover == null ? 'cloud n/a' : `${o.cloud_cover}% cloud`}</option>)}</select></label><button disabled={busy || observations.length < 2} style={button}>{busy ? 'Working…' : 'Run vegetation analysis'}</button>{observations.length < 2 && <small style={{ color: '#e6c17a' }}>At least two observations are required. Widen the date range or raise the cloud limit.</small>}</form>}
 
     {analysisId && !busy && status.startsWith('Analysis completed') && <div style={{ borderTop: '1px solid rgba(255,255,255,.14)', marginTop: 10, paddingTop: 10, display: 'grid', gap: 7 }}><form onSubmit={onExplain} style={{ display: 'grid', gap: 6 }}><label>Ask the investigator<input value={question} onChange={e => setQuestion(e.target.value)} style={field}/></label><button style={button}>Explain measured results</button></form>{interpretation && <p style={{ whiteSpace: 'pre-wrap', lineHeight: 1.5, color: '#c4c7cc' }}>{interpretation}</p>}<button type="button" onClick={() => void onReport()} style={button}>Generate and download PDF</button></div>}
   </aside>;
@@ -181,4 +154,3 @@ export default function AnalysisWorkflow() {
 
 const field: CSSProperties = { display: 'block', width: '100%', marginTop: 3, padding: 6, borderRadius: 2, border: '1px solid rgba(255,255,255,.16)', background: '#0a0c0f', color: '#f3f3ef', fontSize: 11 };
 const button: CSSProperties = { padding: '8px 10px', border: 0, borderRadius: 2, background: '#6fa8ff', color: '#05101f', fontWeight: 600, cursor: 'pointer' };
-const linkButton: CSSProperties = { padding: 0, border: 0, background: 'transparent', color: '#8fbaff', cursor: 'pointer', fontSize: 11, textAlign: 'left' };

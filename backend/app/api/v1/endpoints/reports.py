@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.database import get_db
-from app.core.security import get_current_user
+from app.api.deps import get_workspace_user
 from app.models.schema import Report, User
 from app.services.analysis.jobs import get_job
 from app.services.reports.pdf_builder import build_analysis_pdf, _region_label
@@ -58,7 +58,7 @@ def _report_thumbnails(job: dict) -> dict[str, bytes]:
     return output
 
 @router.post("/generate", status_code=201)
-def generate_report(payload: GenerateReportRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def generate_report(payload: GenerateReportRequest, user: User = Depends(get_workspace_user), db: Session = Depends(get_db)):
     job = get_job(payload.analysis_id)
     if not job:
         raise HTTPException(status_code=404, detail="Source analysis not found")
@@ -122,18 +122,18 @@ def generate_report(payload: GenerateReportRequest, user: User = Depends(get_cur
         raise HTTPException(status_code=500, detail="Report generation failed; its error status was recorded when storage was available") from exc
 
 @router.get("")
-def list_reports(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def list_reports(user: User = Depends(get_workspace_user), db: Session = Depends(get_db)):
     rows = db.scalars(select(Report).where(Report.owner_id == user.id).order_by(Report.created_at.desc())).all()
     return {"reports": [_metadata(row) for row in rows]}
 
 @router.get("/{report_id}")
-def get_report(report_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_report(report_id: str, user: User = Depends(get_workspace_user), db: Session = Depends(get_db)):
     row = db.scalar(select(Report).where(Report.id == report_id, Report.owner_id == user.id))
     if not row: raise HTTPException(status_code=404, detail="Report not found")
     return {"report": _metadata(row)}
 
 @router.get("/{report_id}/download")
-def download_report(report_id: str, format: str = Query(pattern="^(pdf|csv|geojson)$"), user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def download_report(report_id: str, format: str = Query(pattern="^(pdf|csv|geojson)$"), user: User = Depends(get_workspace_user), db: Session = Depends(get_db)):
     row = db.scalar(select(Report).where(Report.id == report_id, Report.owner_id == user.id))
     if not row: raise HTTPException(status_code=404, detail="Report not found")
     metadata = _metadata(row)

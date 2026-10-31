@@ -26,8 +26,7 @@ export default function InvestigatorDrawer({ analysisId, locationName = "Selecte
       if (response.status === "analysis_started" || response.status === "accepted" || response.status === "running") {
         for (let attempt = 0; attempt < 40 && response.progress_url; attempt++) {
           await new Promise(resolve => setTimeout(resolve, 2000));
-          const token = window.localStorage.getItem("terramind_access_token");
-          const progress = await fetch(`${apiRoot}${response.progress_url}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+          const progress = await fetch(`${apiRoot}${response.progress_url}`);
           const job = await progress.json();
           if (job.status === "completed") { response = await investigate(clean, response.analysis_id); break; }
           if (job.status === "failed") throw new Error(job.error?.detail ?? "The geospatial analysis failed.");
