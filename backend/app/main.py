@@ -1,26 +1,52 @@
+import os
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+
 from collections import defaultdict, deque
 from threading import Lock
 from time import monotonic
 
+
 from app.api.v1.endpoints.satellite import router as satellite_router
 from app.api.v1.endpoints.analysis import router as analysis_router
 from app.api.v1.endpoints.ai import router as ai_router
+
 from app.api.v1.endpoints.reports import router as reports_router
 from app.api.v1.endpoints.auth import router as auth_router
 from app.api.v1.endpoints.regions import router as regions_router
 from app.core.config import get_settings
 from app.core.database import get_engine
+
+from app.api.v1.endpoints.monitoring import router as monitoring_router
+from app.services.monitoring.scheduler import start_scheduler, stop_scheduler
+
 from app.services.earth_engine.errors import EarthEngineError
 from sqlalchemy.exc import SQLAlchemyError
 from app.services.monitoring_scheduler import start_scheduler, stop_scheduler
 
-app = FastAPI(title="TerraMind AI API")
+@asynccontextmanager
+async def lifespan(_app):
+    start_scheduler()
+    try:
+        yield
+    finally:
+        stop_scheduler()
+
+
+app = FastAPI(title="TerraMind AI API", lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[origin.strip() for origin in os.getenv("FRONTEND_ORIGINS", "http://localhost:3000").split(",") if origin.strip()],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
+)
 app.include_router(satellite_router, prefix="/api")
 app.include_router(analysis_router, prefix="/api")
 app.include_router(ai_router, prefix="/api")
+
 app.include_router(reports_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
 app.include_router(regions_router, prefix="/api")
@@ -66,6 +92,9 @@ async def request_size_limit(request: Request, call_next):
                 return JSONResponse(status_code=429, content={"detail": "Request rate limit exceeded; try again shortly"}, headers={"Retry-After": "60"})
             bucket.append(now)
     return await call_next(request)
+
+app.include_router(monitoring_router, prefix="/api")
+
 
 
 @app.exception_handler(EarthEngineError)

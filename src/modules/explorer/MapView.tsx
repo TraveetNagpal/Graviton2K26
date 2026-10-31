@@ -241,6 +241,8 @@ export default function MapView() {
             paint: { 'raster-opacity': layer.opacity },
           });
         } else {
+          const rasterSource = map.getSource(srcId) as maplibregl.RasterTileSource;
+          rasterSource.setTiles([layer.url!]);
           if (map.getLayer(lyrId)) {
             map.setLayoutProperty(lyrId, 'visibility', layer.visible ? 'visible' : 'none');
             map.setPaintProperty(lyrId, 'raster-opacity', layer.opacity);

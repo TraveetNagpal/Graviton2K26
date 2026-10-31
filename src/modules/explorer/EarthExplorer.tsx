@@ -24,6 +24,7 @@ import MapControls from './MapControls';
 import LayerPanel from './LayerPanel';
 import SelectionInfoPanel from './SelectionInfoPanel';
 import LegendPanel from './LegendPanel';
+import HistoricalTimeline from './HistoricalTimeline';
 import type { LngLat } from '@/types';
 import styles from './EarthExplorer.module.css';
 import AnalysisWorkflow from './AnalysisWorkflow';
@@ -73,6 +74,7 @@ export default function EarthExplorer() {
         <LayerPanel />
         <SelectionInfoPanel />
         <LegendPanel />
+        <HistoricalTimeline />
       </div>
     </div>
   );

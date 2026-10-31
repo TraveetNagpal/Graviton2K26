@@ -4,10 +4,15 @@ from fastapi.responses import JSONResponse
 from shapely.geometry import shape
 from shapely.validation import explain_validity
 
+
 from app.schemas.contracts import VegetationAnalysisRequest, WaterAnalysisRequest, UrbanAnalysisRequest
 from app.services.analysis.jobs import get_job, get_layer_tiles, run_job, submit
 from app.core.security import get_current_user
 from app.models.schema import User
+
+from app.schemas.contracts import HistoricalTrendRequest, VegetationAnalysisRequest, WaterAnalysisRequest, UrbanAnalysisRequest
+from app.services.analysis.jobs import get_job, get_layer_tiles, run_job, run_trend_job, submit
+
 
 router = APIRouter(prefix="/analysis", tags=["Change analysis"])
 
@@ -26,12 +31,20 @@ def _submit(kind, payload, background_tasks, user):
     except Exception as exc:
         raise HTTPException(status_code=422, detail={"error": "invalid_area", "detail": str(exc)}) from exc
     request = payload.model_dump(mode="json")
+
     analysis_id = submit(kind, request, owner_id=user.id)
     background_tasks.add_task(run_job, analysis_id)
+
+    analysis_id = submit(kind, request)
+    job = get_job(analysis_id)
+    if job["status"] == "accepted":
+        background_tasks.add_task(run_job, analysis_id)
+
     return JSONResponse(status_code=202, content={
         "analysis_id": analysis_id,
         "analysis_type": kind,
-        "status": "accepted",
+        "status": job["status"],
+        "cached_or_in_progress": job["status"] != "accepted",
         "status_url": f"/api/analysis/{analysis_id}",
         "layers_url": f"/api/analysis/{analysis_id}/layers",
     })
@@ -55,24 +68,60 @@ def analyze_urban(payload: UrbanAnalysisRequest, background_tasks: BackgroundTas
     return _submit("urban", payload, background_tasks, user)
 
 
+@router.post("/trend", status_code=202)
+def analyze_trend(payload: HistoricalTrendRequest, background_tasks: BackgroundTasks):
+    """Compare actual selected observations with a baseline; exact repeated requests reuse cached jobs."""
+    try:
+        geometry = shape(payload.area_of_interest)
+        if geometry.geom_type not in ("Polygon", "MultiPolygon") or geometry.is_empty or not geometry.is_valid:
+            reason = explain_validity(geometry) if not geometry.is_empty else "geometry is empty"
+            raise ValueError(f"AOI must be a valid non-empty Polygon or MultiPolygon: {reason}")
+        minx, miny, maxx, maxy = geometry.bounds
+        if minx < -180 or maxx > 180 or miny < -90 or maxy > 90 or geometry.area <= 0 or geometry.area > 100:
+            raise ValueError("AOI is outside the supported geographic-area limit")
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail={"error": "invalid_area", "detail": str(exc)}) from exc
+    request = payload.model_dump(mode="json")
+    analysis_id = submit("trend", request)
+    job = get_job(analysis_id)
+    if job["status"] == "accepted":
+        background_tasks.add_task(run_trend_job, analysis_id)
+    return JSONResponse(status_code=202, content={
+        "analysis_id": analysis_id, "analysis_type": payload.analysis_type,
+        "status": job["status"], "cached_or_in_progress": job["status"] != "accepted",
+        "status_url": f"/api/analysis/{analysis_id}",
+    })
+
+
 @router.get("/{analysis_id}")
 def get_analysis(analysis_id: str, user: User = Depends(get_current_user)):
     job = get_job(analysis_id)
     if not job:
         raise HTTPException(status_code=404, detail="Analysis not found")
+
     if job.get("owner_id") != user.id:
         raise HTTPException(status_code=404, detail="Analysis not found")
     response = {key: value for key, value in job.items() if key not in ("request", "layer_images")}
+
+    response = {key: value for key, value in job.items() if key not in ("request", "layer_images", "cache_key")}
+
     if job["status"] == "completed":
         response.update(job["result"])
     return response
 
 
 @router.get("/{analysis_id}/layers")
+
 def get_analysis_layers(analysis_id: str, user: User = Depends(get_current_user)):
     job = get_job(analysis_id)
     if not job or job.get("owner_id") != user.id:
         raise HTTPException(status_code=404, detail="Analysis not found")
+
+def get_analysis_layers(analysis_id: str):
+    job = get_job(analysis_id)
+    if job and job["analysis_type"] == "trend":
+        raise HTTPException(status_code=409, detail="Select a completed trend point to retrieve its paired analysis layers")
+
     result, state = get_layer_tiles(analysis_id)
     if state == "not_found":
         raise HTTPException(status_code=404, detail="Analysis not found")

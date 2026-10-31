@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 from shapely.geometry import shape
 from shapely.validation import explain_validity
 
-from app.schemas.contracts import SatelliteSearchRequest
+from app.schemas.contracts import PrepareObservationRequest, SatelliteSearchRequest
 from app.services.earth_engine.client import earth_engine_client
 from app.services.earth_engine.errors import EarthEngineError
 from app.services.earth_engine.settings import get_ee_settings
@@ -48,7 +48,7 @@ def satellite_search(payload: SatelliteSearchRequest, user: User = Depends(get_c
     if days > settings.max_search_days:
         return JSONResponse(status_code=422, content={"error": "date_range_too_large", "detail": f"Date range exceeds configured maximum of {settings.max_search_days} days"})
     try:
-        aoi = _validate_aoi(payload.area_of_interest)
+        _validate_aoi(payload.area_of_interest)
     except Exception as exc:
         return JSONResponse(status_code=422, content={"error": "invalid_area", "detail": str(exc)})
     try:
@@ -90,4 +90,31 @@ def satellite_search(payload: SatelliteSearchRequest, user: User = Depends(get_c
             "missing_observations": not bool(observations),
             "metadata_persisted": metadata_persisted,
         },
+    }
+
+
+@router.post("/satellite/preview")
+def satellite_preview(payload: PrepareObservationRequest):
+    """Return a lightweight authenticated EE true-colour tile reference for one real catalog image."""
+    settings = get_ee_settings()
+    try:
+        aoi = _validate_aoi(payload.area_of_interest)
+        geometry = ee.Geometry(payload.area_of_interest)
+        earth_engine_client.initialize()
+        area_sq_km = geometry.area(maxError=1000).divide(1_000_000).getInfo()
+        if area_sq_km > settings.max_aoi_area_sq_km:
+            return JSONResponse(status_code=422, content={"error": "invalid_area", "detail": "AOI exceeds configured maximum"})
+        prepared = earth_engine_client.prepare_observation(payload.image_id, payload.dataset, geometry, target_scale_m=payload.target_scale_m, target_crs=payload.target_crs)
+        image = prepared["image"]
+        visualization = {"bands": ["red", "green", "blue"], "min": 0, "max": 0.3, "gamma": 1.2}
+        map_info = image.getMapId(visualization)
+    except EarthEngineError:
+        raise
+    except Exception as exc:
+        return JSONResponse(status_code=422, content={"error": "preview_failed", "detail": str(exc)})
+    return {
+        "image_id": payload.image_id,
+        "dataset": payload.dataset,
+        "metadata": prepared["metadata"],
+        "layer": {"name": "true_colour_preview", "map_id": map_info.get("mapid"), "tile_url_template": map_info["tile_fetcher"].url_format, "visualization": visualization},
     }
