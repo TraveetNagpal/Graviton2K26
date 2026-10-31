@@ -1,0 +1,60 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: terramind
+      POSTGRES_USER: terramind
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U terramind -d terramind"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://terramind:${POSTGRES_PASSWORD}@db:5432/terramind
+      AUTH_SECRET: ${AUTH_SECRET:?Set AUTH_SECRET in .env}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
+      ENVIRONMENT: production
+      REPORT_STORAGE_DIR: /var/lib/terramind/reports
+      PERSIST_ANALYSIS_JOBS: "true"
+      MONITORING_SCHEDULER_ENABLED: "true"
+      GEE_PROJECT: ${GEE_PROJECT:-}
+      GEE_AUTH_MODE: ${GEE_AUTH_MODE:-service_account}
+      GEE_SERVICE_ACCOUNT: ${GEE_SERVICE_ACCOUNT:-}
+      GEE_PRIVATE_KEY_FILE: ${GEE_PRIVATE_KEY_FILE:-/run/secrets/earth-engine-service-account.json}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.openai.com/v1}
+      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-20}
+    volumes:
+      - reports:/var/lib/terramind/reports
+      - ${GEE_KEY_HOST_PATH:-./secrets/earth-engine-service-account.json}:/run/secrets/earth-engine-service-account.json:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/ready', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    build:
+      context: .
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000/api}
+    ports:
+      - "8080:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  reports:
