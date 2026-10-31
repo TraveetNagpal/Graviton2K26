@@ -1,0 +1,1 @@
+// Swipe control component

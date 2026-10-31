@@ -29,3 +29,17 @@ pnpm-debug.log*
 # OS
 .DS_Store
 Thumbs.db
+
+.env
+*.pem
+*.key
+*service-account*.json
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+node_modules/
+.next/
+dist/
+build/
+
