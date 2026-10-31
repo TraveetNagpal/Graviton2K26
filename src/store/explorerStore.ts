@@ -124,6 +124,7 @@ export interface ExplorerState {
   toggleLayerVisibility: (id: string) => void;
   setLayerOpacity: (id: string, opacity: number) => void;
   updateLayerUrl: (id: string, url: string) => void;
+  setAnalysisLayers: (layers: MapLayer[]) => void;
 
   setShowLayerPanel: (v: boolean) => void;
   setShowLegendPanel: (v: boolean) => void;
@@ -187,6 +188,12 @@ export const useExplorerStore = create<ExplorerState>((set) => ({
     set((s) => ({
       layers: s.layers.map((l) => (l.id === id ? { ...l, url } : l)),
     })),
+  setAnalysisLayers: (analysisLayers) => set((s) => ({
+    layers: [
+      ...s.layers.filter((layer) => !layer.id.startsWith('analysis-')),
+      ...analysisLayers,
+    ],
+  })),
 
   setShowLayerPanel: (showLayerPanel) => set({ showLayerPanel }),
   setShowLegendPanel: (showLegendPanel) => set({ showLegendPanel }),

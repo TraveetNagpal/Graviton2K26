@@ -4,8 +4,10 @@ from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.core.security import get_current_user
 
 client = TestClient(app)
+app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=1)
 AOI = {"type": "Polygon", "coordinates": [[[77.5, 12.8], [77.7, 12.8], [77.7, 13], [77.5, 13], [77.5, 12.8]]]}
 
 

@@ -26,6 +26,7 @@ import SelectionInfoPanel from './SelectionInfoPanel';
 import LegendPanel from './LegendPanel';
 import type { LngLat } from '@/types';
 import styles from './EarthExplorer.module.css';
+import AnalysisWorkflow from './AnalysisWorkflow';
 
 export default function EarthExplorer() {
   const viewMode = useExplorerStore((s) => s.viewMode);
@@ -66,6 +67,7 @@ export default function EarthExplorer() {
       {/* Overlaid controls */}
       <div className={styles.overlay} aria-hidden="false">
         <SearchBar />
+        <AnalysisWorkflow />
         <ToolBar />
         <MapControls onFullscreen={handleFullscreen} />
         <LayerPanel />

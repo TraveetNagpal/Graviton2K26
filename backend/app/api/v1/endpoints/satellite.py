@@ -1,8 +1,9 @@
 """Satellite catalog API. Processing helpers remain available to Module 5 in-process."""
 from datetime import datetime, timezone
+import logging
 
 import ee
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from shapely.geometry import shape
 from shapely.validation import explain_validity
@@ -11,8 +12,15 @@ from app.schemas.contracts import SatelliteSearchRequest
 from app.services.earth_engine.client import earth_engine_client
 from app.services.earth_engine.errors import EarthEngineError
 from app.services.earth_engine.settings import get_ee_settings
+from app.core.security import get_current_user
+from app.models.schema import User
+from app.models.schema import SatelliteObservation
+from app.core.database import get_db
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 router = APIRouter(tags=["Satellite"])
+logger = logging.getLogger(__name__)
 
 
 def _validate_aoi(geojson):
@@ -34,7 +42,7 @@ def earth_engine_status():
 
 
 @router.post("/satellite/search")
-def satellite_search(payload: SatelliteSearchRequest):
+def satellite_search(payload: SatelliteSearchRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     settings = get_ee_settings()
     days = (payload.end_date - payload.start_date).days
     if days > settings.max_search_days:
@@ -58,6 +66,17 @@ def satellite_search(payload: SatelliteSearchRequest):
     if area_sq_km > settings.max_aoi_area_sq_km:
         return JSONResponse(status_code=422, content={"error": "invalid_area", "detail": f"AOI exceeds configured maximum of {settings.max_aoi_area_sq_km} sq km"})
     observations = earth_engine_client.search(payload, geometry)
+    metadata_persisted = True
+    try:
+        for observation in observations:
+            exists = db.scalar(select(SatelliteObservation.id).where(SatelliteObservation.asset_id == observation["image_id"]))
+            if not exists:
+                observed_at = datetime.fromisoformat(observation["date"]).replace(tzinfo=timezone.utc)
+                db.add(SatelliteObservation(dataset=observation["dataset"], asset_id=observation["image_id"], observed_at=observed_at, cloud_cover_percent=observation.get("cloud_cover"), metadata_json=observation.get("quality") or {}))
+        db.commit()
+    except Exception:
+        db.rollback(); metadata_persisted = False
+        logger.error("Could not persist satellite catalog metadata")
     return {
         "observations": observations,
         "processing": {
@@ -69,5 +88,6 @@ def satellite_search(payload: SatelliteSearchRequest):
             "result_count": len(observations),
             "searched_at": datetime.now(timezone.utc).isoformat(),
             "missing_observations": not bool(observations),
+            "metadata_persisted": metadata_persisted,
         },
     }

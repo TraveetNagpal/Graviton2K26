@@ -6,7 +6,7 @@ import LoadingSpinner from './components/ui/LoadingSpinner';
 // Module 2 – Interactive Earth Explorer (lazy-loaded for code splitting)
 const EarthExplorer = lazy(() => import('./modules/explorer/EarthExplorer'));
 
-// Module 1 placeholder – Dashboard (integrate separately without rebuilding this module)
+// Dashboard overview
 const Dashboard = lazy(() => import('./modules/dashboard/Dashboard'));
 const Reports = lazy(() => import('./modules/reports/Reports'));
 
@@ -15,7 +15,7 @@ export default function App() {
     <AppShell>
       <Suspense fallback={<LoadingSpinner message="Loading module…" />}>
         <Routes>
-          <Route path="/" element={<Navigate to="/explorer" replace />} />
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/explorer" element={<EarthExplorer />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/reports" element={<Reports />} />
