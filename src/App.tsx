@@ -8,6 +8,7 @@ const EarthExplorer = lazy(() => import('./modules/explorer/EarthExplorer'));
 
 // Module 1 placeholder – Dashboard (integrate separately without rebuilding this module)
 const Dashboard = lazy(() => import('./modules/dashboard/Dashboard'));
+const Reports = lazy(() => import('./modules/reports/Reports'));
 
 export default function App() {
   return (
@@ -17,6 +18,7 @@ export default function App() {
           <Route path="/" element={<Navigate to="/explorer" replace />} />
           <Route path="/explorer" element={<EarthExplorer />} />
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/reports" element={<Reports />} />
           <Route path="*" element={<Navigate to="/explorer" replace />} />
         </Routes>
       </Suspense>

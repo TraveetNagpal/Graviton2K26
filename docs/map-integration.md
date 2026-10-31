@@ -163,6 +163,60 @@ store.updateLayerUrl('change-before-after', apiResponse.tileUrl);
 
 ---
 
+## Module 9 – Reports and exports
+
+The Reports page is available at `/reports`. It expects the API base URL in
+`VITE_API_BASE_URL`; for example, `http://localhost:8000/api` maps to the
+following report endpoints:
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| POST | `/api/reports/generate` | Validate a source analysis and queue/generate artifacts |
+| GET | `/api/reports` | List the signed-in user's reports |
+| GET | `/api/reports/{report_id}` | Read a report and its metadata |
+| GET | `/api/reports/{report_id}/download?format=pdf\|csv\|geojson` | Secure artifact download |
+
+Generation request:
+
+```json
+{ "analysis_id": "analysis-123", "title": "Optional title", "formats": ["pdf", "csv", "geojson"] }
+```
+
+The server must authorize the caller against the source analysis and report on
+every request. It must reject unknown or inaccessible analysis IDs; derive
+region, observations, dataset, method, measurements, quality, interpretation,
+uncertainty, and processing time from the stored analysis result; and omit
+unavailable values instead of substituting zero. A completed response should
+include a report record and only the download URLs/artifacts supported by that
+analysis. Failed jobs should include a useful `error` and `status: "failed"`.
+
+The PDF is a server-generated report containing the actual source result,
+before/after imagery and change map when supplied, measurement units, chart/map
+legends, methodology, quality and limitation notes, observation dates, and
+page numbers. CSV contains only available tabular measurements. GeoJSON is
+exposed only for actual compatible vector output; raster tiles/images must
+never be converted or advertised as GeoJSON. Downloads should be protected by
+the same authorization as report metadata (or short-lived signed URLs).
+
+Example completed record:
+
+```json
+{
+  "report": {
+    "id": "report-456", "title": "Vegetation change", "region": "Punjab",
+    "createdAt": "2026-10-31T10:00:00Z", "analysisType": "vegetation_change",
+    "status": "completed", "observationDates": ["2025-01-01", "2026-01-01"],
+    "analysisMethod": "NDVI differencing", "dataset": "Sentinel-2",
+    "measurements": [{"name":"Area changed","value":12.4,"unit":"km²"}],
+    "geojsonAvailable": false
+  }
+}
+```
+
+The browser client sends credentials with requests. Configure CORS and cookie
+security for the deployment origin; do not put bearer credentials or signed
+download tokens in report metadata intended for public display.
+
 ## Adding Module 1 (Dashboard)
 
 Module 1 is already wired into routing:
