@@ -56,6 +56,9 @@ export default function AppShell({ children }: AppShellProps) {
           >
             Earth Explorer
           </NavLink>
+          <NavLink to="/reports" className={({ isActive }) => `${styles.navLink} ${isActive ? styles.active : ''}`}>
+            Reports
+          </NavLink>
         </nav>
       </header>
 
