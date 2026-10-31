@@ -3,7 +3,6 @@
  * and viewing backend integration status.
  */
 
-import React from 'react';
 import { useExplorerStore } from '@/store';
 import type { MapLayer, LayerCategory } from '@/types';
 import styles from './LayerPanel.module.css';

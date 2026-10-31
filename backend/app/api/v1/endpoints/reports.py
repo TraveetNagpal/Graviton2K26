@@ -4,6 +4,7 @@ import asyncio
 from datetime import datetime, timezone
 from io import StringIO
 from pathlib import Path
+from typing import Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -28,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 class GenerateReportRequest(BaseModel):
     analysis_id: str = Field(min_length=1, max_length=100)
-    title: str | None = Field(default=None, max_length=250)
+    title: Optional[str] = Field(default=None, max_length=250)
     formats: list[str] = Field(default_factory=lambda: ["pdf", "csv"])
 
 def _metadata(report: Report) -> dict:

@@ -5,13 +5,10 @@ from shapely.geometry import shape
 from shapely.validation import explain_validity
 
 
-from app.schemas.contracts import VegetationAnalysisRequest, WaterAnalysisRequest, UrbanAnalysisRequest
-from app.services.analysis.jobs import get_job, get_layer_tiles, run_job, submit
-from app.core.security import get_current_user
-from app.models.schema import User
-
 from app.schemas.contracts import HistoricalTrendRequest, VegetationAnalysisRequest, WaterAnalysisRequest, UrbanAnalysisRequest
 from app.services.analysis.jobs import get_job, get_layer_tiles, run_job, run_trend_job, submit
+from app.core.security import get_current_user
+from app.models.schema import User
 
 
 router = APIRouter(prefix="/analysis", tags=["Change analysis"])
@@ -33,9 +30,6 @@ def _submit(kind, payload, background_tasks, user):
     request = payload.model_dump(mode="json")
 
     analysis_id = submit(kind, request, owner_id=user.id)
-    background_tasks.add_task(run_job, analysis_id)
-
-    analysis_id = submit(kind, request)
     job = get_job(analysis_id)
     if job["status"] == "accepted":
         background_tasks.add_task(run_job, analysis_id)
@@ -69,7 +63,7 @@ def analyze_urban(payload: UrbanAnalysisRequest, background_tasks: BackgroundTas
 
 
 @router.post("/trend", status_code=202)
-def analyze_trend(payload: HistoricalTrendRequest, background_tasks: BackgroundTasks):
+def analyze_trend(payload: HistoricalTrendRequest, background_tasks: BackgroundTasks, user: User = Depends(get_current_user)):
     """Compare actual selected observations with a baseline; exact repeated requests reuse cached jobs."""
     try:
         geometry = shape(payload.area_of_interest)
@@ -82,7 +76,7 @@ def analyze_trend(payload: HistoricalTrendRequest, background_tasks: BackgroundT
     except Exception as exc:
         raise HTTPException(status_code=422, detail={"error": "invalid_area", "detail": str(exc)}) from exc
     request = payload.model_dump(mode="json")
-    analysis_id = submit("trend", request)
+    analysis_id = submit("trend", request, owner_id=user.id)
     job = get_job(analysis_id)
     if job["status"] == "accepted":
         background_tasks.add_task(run_trend_job, analysis_id)
@@ -101,9 +95,7 @@ def get_analysis(analysis_id: str, user: User = Depends(get_current_user)):
 
     if job.get("owner_id") != user.id:
         raise HTTPException(status_code=404, detail="Analysis not found")
-    response = {key: value for key, value in job.items() if key not in ("request", "layer_images")}
-
-    response = {key: value for key, value in job.items() if key not in ("request", "layer_images", "cache_key")}
+    response = {key: value for key, value in job.items() if key not in ("request", "layer_images", "cache_key", "result")}
 
     if job["status"] == "completed":
         response.update(job["result"])
@@ -111,14 +103,10 @@ def get_analysis(analysis_id: str, user: User = Depends(get_current_user)):
 
 
 @router.get("/{analysis_id}/layers")
-
 def get_analysis_layers(analysis_id: str, user: User = Depends(get_current_user)):
     job = get_job(analysis_id)
     if not job or job.get("owner_id") != user.id:
         raise HTTPException(status_code=404, detail="Analysis not found")
-
-def get_analysis_layers(analysis_id: str):
-    job = get_job(analysis_id)
     if job and job["analysis_type"] == "trend":
         raise HTTPException(status_code=409, detail="Select a completed trend point to retrieve its paired analysis layers")
 

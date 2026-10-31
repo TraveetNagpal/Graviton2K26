@@ -1,6 +1,6 @@
 import type { ReportRecord, ReportResponse } from './types';
 
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api').replace(/\/$/, '').replace(/\/v1$/, '');
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '').replace(/\/v1$/, '');
 const reportsUrl = `${API_BASE}/reports`;
 
 function authHeaders(headers?: HeadersInit): HeadersInit {

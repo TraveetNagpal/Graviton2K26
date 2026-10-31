@@ -2,7 +2,6 @@
  * LegendPanel – shows colour legends for all visible layers that have legend entries.
  */
 
-import React from 'react';
 import { useExplorerStore } from '@/store';
 import styles from './LegendPanel.module.css';
 

@@ -5,7 +5,7 @@
  * Handles all selection modes and renders active selection as GeoJSON layers.
  */
 
-import React, { useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { useExplorerStore } from '@/store';
@@ -75,10 +75,9 @@ export default function MapView() {
       style: OSM_STYLE,
       center: [initialCamera.longitude, initialCamera.latitude],
       zoom: 3,
-      attributionControl: true,
+      attributionControl: { compact: true },
     });
 
-    map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
 
     map.on('load', () => {
       // ── Selection source + layers ────────────────────────────────────────

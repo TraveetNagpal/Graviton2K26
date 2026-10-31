@@ -3,7 +3,7 @@ import { useExplorerStore } from '@/store';
 import type { MapLayer } from '@/types';
 import { downloadReportFile, generateReport, saveDownload } from '@/modules/reports/api';
 
-const API = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api').replace(/\/$/, '').replace(/\/v1$/, '');
+const API = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '').replace(/\/v1$/, '');
 type Observation = { date: string; dataset: string; dataset_id: string; image_id: string; cloud_cover: number | null };
 type LayerResult = { name: string; tile_url_template: string; visualization: { min: number; max: number; palette?: string[]; bands?: string[] } };
 

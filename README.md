@@ -53,7 +53,7 @@ To calculate a timeline, choose at least two selected actual observations and a 
 
 Exact duplicate analysis requests reuse an accepted, running, or completed job within the current backend process. Cache and jobs are process-local and are lost on restart; use the durable task queue/database before production or multi-worker deployment. Trend computation is a sequence of baseline comparisons, so large selections can take time; narrow date range or use a coarser observation frequency. Configure `FRONTEND_ORIGINS` on the backend for browser access and `VITE_API_BASE_URL` in the Vite app (the latter is a public URL only and must never contain credentials).
 
-Run the main web app from the repository root with `npm install` then `npm run dev`; set `VITE_API_BASE_URL` to the backend's `/api` address if it differs from `http://localhost:8000/api`.
+Run the main web app from the repository root with `npm install` then `npm run dev`; Vite proxies same-origin `/api` requests to the backend on port 8000.
 
 ### Module 8: regional monitoring and alerts
 
@@ -91,7 +91,7 @@ The integrated application uses the existing Vite/React explorer and FastAPI bac
 3. Run `docker compose up --build`. Compose starts PostGIS, runs Alembic migrations before FastAPI, and serves the frontend at `http://localhost:8080`. The backend API is at `http://localhost:8000`; health and readiness are `/health` and `/ready`.
 4. Open Reports and create an account (password minimum 12 characters). Then open the Explorer, draw a polygon, search actual catalog observations, choose two dates, and run vegetation analysis. Results and report downloads are scoped to the signed-in account.
 
-For frontend-only development, run `npm install` and `npm run dev`, setting `VITE_API_BASE_URL=http://localhost:8000/api`. For backend development, install `backend/requirements.txt`, set the same server environment variables, start PostgreSQL/PostGIS, then run `alembic upgrade head` and `uvicorn app.main:app --reload` from `backend/`.
+For frontend-only development, run `npm install` and `npm run dev`; Vite proxies `/api` to a backend on port 8000. For backend development, install `backend/requirements.txt`, set the same server environment variables, start PostgreSQL/PostGIS, then run `alembic upgrade head` and `uvicorn app.main:app --reload` from `backend/`.
 
 ### Configuration and API security
 
@@ -104,3 +104,19 @@ Monitoring configurations retain an owner-scoped region, UTC five-field cron sch
 ### Tests and operational limits
 
 Run the backend suite with `cd backend && pytest`. The numerical and mocked API tests do not require Earth Engine credentials. Real catalog, Earth Engine processing, and the full browser-to-PDF workflow require configured credentials and a running PostGIS service. The deployment PDF records source asset IDs, dates, method, measurements, quality/uncertainty, an AI interpretation when configured, and a vegetation change legend. It embeds before/after true-colour thumbnails when Earth Engine can render them, and report metadata records whether both were included. GeoJSON remains disabled because current change outputs are rasters.
+
+## Deploy the web app and API to Vercel
+
+`vercel.json` configures the repository's Vite app and FastAPI backend as Vercel Services. Requests under `/api` go to FastAPI; the remaining routes go to the Vite single-page app. API docs are available at `/docs`. The app uses Python 3.12 as selected by `.python-version`.
+
+Import this repository into Vercel with the repository root as the project root, then set these environment variables before deploying:
+
+- `VITE_API_BASE_URL=/api`
+- `DATABASE_URL` to a managed PostgreSQL connection with PostGIS enabled (use the provider's pooled connection string for serverless workloads)
+- `AUTH_SECRET` to a unique random value of at least 32 characters
+- Earth Engine credentials (`GEE_PROJECT`, `GEE_AUTH_MODE`, `GEE_SERVICE_ACCOUNT`, and `GEE_PRIVATE_KEY_JSON`, or the credentials supported by your runtime identity)
+- `PERSIST_ANALYSIS_JOBS=true` if analysis job status must survive function instances
+- `REPORT_STORAGE_DIR=/tmp/terramind-reports` if report generation is enabled
+- `MONITORING_SCHEDULER_ENABLED=false` and `MONITOR_SCHEDULER_ENABLED=false`; Vercel functions do not provide a persistent process for the in-process schedulers
+
+The database schema must be migrated before protected database-backed endpoints are used (`cd backend && alembic upgrade head`). Vercel's function filesystem is temporary: reports written under `/tmp` are not durable, and Earth Engine tile-map objects remain process-local. Use durable object storage for generated report artifacts and a persistent worker/queue for scheduled monitoring before relying on those features in production. `vercel dev -L` runs the configured services locally without linking a Vercel project.

@@ -1,5 +1,5 @@
 """Private saved regions and monitoring configurations."""
-from typing import Any, Literal
+from typing import Any, Literal, Union
 import json
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
@@ -30,7 +30,7 @@ class MonitoringPayload(BaseModel):
     schedule: str = Field(min_length=1, max_length=80, description="Five-field UTC cron schedule")
     parameters: dict[str, Any]
 
-def validate_geometry(geojson: dict) -> Polygon | MultiPolygon:
+def validate_geometry(geojson: dict) -> Union[Polygon, MultiPolygon]:
     try:
         geometry = shape(geojson)
         if not isinstance(geometry, (Polygon, MultiPolygon)) or geometry.is_empty or not geometry.is_valid:

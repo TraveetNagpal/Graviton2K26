@@ -16,7 +16,8 @@
     "noFallthroughCasesInSwitch": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "@turf/turf": ["./node_modules/@turf/turf/index.d.ts"]
     }
   },
   "include": ["src"],

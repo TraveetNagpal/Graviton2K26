@@ -21,8 +21,6 @@ function useDebounce<T>(value: T, delay: number): T {
 
 export default function SearchBar() {
   const setCamera = useExplorerStore((s) => s.setCamera);
-  const viewMode = useExplorerStore((s) => s.viewMode);
-
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);

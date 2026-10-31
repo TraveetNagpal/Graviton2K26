@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 import json
 import logging
 from threading import RLock
+from typing import Optional
 from uuid import uuid4
 
 from app.services.analysis.engine import VISUALIZATION, change_detection_engine
@@ -22,12 +23,17 @@ def _now():
 
 
 
-def submit(kind: str, request: dict, owner_id: int | None = None) -> str:
-    analysis_id = str(uuid4())
-    request = dict(request)
-    request["analysis_id"] = analysis_id
+def submit(kind: str, request: dict, owner_id: Optional[int] = None) -> str:
+    cache_key = json.dumps({"kind": kind, "request": request}, sort_keys=True, separators=(",", ":"), default=str)
     with _lock:
-        _jobs[analysis_id] = {"analysis_id": analysis_id, "analysis_type": kind, "status": "accepted", "created_at": _now(), "request": request, "result": None, "layer_images": None, "error": None, "owner_id": owner_id}
+        for existing_id, existing in _jobs.items():
+            same_owner = existing.get("owner_id") == owner_id
+            if same_owner and existing.get("cache_key") == cache_key and existing.get("status") in ("accepted", "running", "completed"):
+                return existing_id
+        analysis_id = str(uuid4())
+        request = dict(request)
+        request["analysis_id"] = analysis_id
+        _jobs[analysis_id] = {"analysis_id": analysis_id, "analysis_type": kind, "status": "accepted", "created_at": _now(), "request": request, "result": None, "layer_images": None, "error": None, "owner_id": owner_id, "cache_key": cache_key}
     if get_settings().persist_analysis_jobs:
         try:
             _persist_job(analysis_id, "accepted", kind, request, owner_id=owner_id)
@@ -35,18 +41,6 @@ def submit(kind: str, request: dict, owner_id: int | None = None) -> str:
             with _lock: _jobs.pop(analysis_id, None)
             logger.exception("Could not persist accepted analysis job %s", analysis_id)
             raise HTTPException(status_code=503, detail="Analysis storage is unavailable; no job was accepted") from exc
-
-def submit(kind: str, request: dict) -> str:
-    cache_key = json.dumps({"kind": kind, "request": request}, sort_keys=True, separators=(",", ":"), default=str)
-    with _lock:
-        for existing_id, existing in _jobs.items():
-            if existing.get("cache_key") == cache_key and existing.get("status") in ("accepted", "running", "completed"):
-                return existing_id
-        analysis_id = str(uuid4())
-        request = dict(request)
-        request["analysis_id"] = analysis_id
-        _jobs[analysis_id] = {"analysis_id": analysis_id, "analysis_type": kind, "status": "accepted", "created_at": _now(), "request": request, "result": None, "layer_images": None, "error": None, "cache_key": cache_key}
-
     return analysis_id
 
 
@@ -183,6 +177,7 @@ def run_trend_job(analysis_id: str) -> None:
         job["status"] = "running"
         job["started_at"] = _now()
         request = dict(job["request"])
+        owner_id = job.get("owner_id")
     try:
         kind = request["analysis_type"]
         observations = request["observations"]
@@ -198,8 +193,7 @@ def run_trend_job(analysis_id: str) -> None:
             is_before_baseline = observation["date"] < baseline["date"]
             first, second = (observation, baseline) if is_before_baseline else (baseline, observation)
             pair_request.update({"earlier_image_id": first["image_id"], "earlier_dataset": first["dataset"], "later_image_id": second["image_id"], "later_dataset": second["dataset"]})
-            pair_request["analysis_id"] = submit(kind, pair_request)
-            sub_id = pair_request["analysis_id"]
+            sub_id = submit(kind, pair_request, owner_id=owner_id)
             sub_job = get_job(sub_id)
             if sub_job and sub_job["status"] not in ("completed", "failed"):
                 run_job(sub_id)
