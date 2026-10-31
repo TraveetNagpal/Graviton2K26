@@ -9,7 +9,14 @@ from pathlib import Path
 
 
 def _path() -> str:
-    return os.getenv("MONITOR_DB_PATH", "terramind_monitoring.sqlite3")
+    configured = os.getenv("MONITOR_DB_PATH")
+    if configured:
+        return configured
+    # Vercel's project directory is read-only; only /tmp is writable. That mount
+    # is per-instance, so schedule monitoring on a persistent disk/Docker instead.
+    if os.environ.get("VERCEL") == "1":
+        return "/tmp/terramind_monitoring.sqlite3"
+    return "terramind_monitoring.sqlite3"
 
 
 def connect():

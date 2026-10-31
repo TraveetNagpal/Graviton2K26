@@ -83,15 +83,23 @@ def generate_report(payload: GenerateReportRequest, user: User = Depends(get_wor
     directory = Path(get_settings().report_storage_dir).resolve()
     thumbnails = _report_thumbnails(job) if "pdf" in requested else {}
     try:
-        directory.mkdir(parents=True, exist_ok=True)
+        artifacts: dict[str, bytes] = {}
         if "pdf" in requested:
-            (directory / f"{report_id}.pdf").write_bytes(build_analysis_pdf(title, report_result, report_id, thumbnails))
+            artifacts["pdf"] = build_analysis_pdf(title, report_result, report_id, thumbnails)
         if "csv" in requested:
             output = StringIO(); writer = csv.writer(output); writer.writerow(["measurement", "value", "unit"])
             for key, value in (result.get("measurements") or {}).items():
                 if value is not None:
                     writer.writerow([key, value, "ha" if key.endswith("_ha") else "m2" if key.endswith("_m2") else "index"])
-            (directory / f"{report_id}.csv").write_text(output.getvalue(), encoding="utf-8")
+            artifacts["csv"] = output.getvalue().encode("utf-8")
+        try:
+            directory.mkdir(parents=True, exist_ok=True)
+            for suffix, content in artifacts.items():
+                (directory / f"{report_id}.{suffix}").write_bytes(content)
+            artifact_uri = str(directory)
+        except OSError:
+            logger.warning("Report file storage is unavailable; serving artifacts from PostgreSQL")
+            artifact_uri = None
         analysis_dates = result.get("observation_dates") or {}
         datasets = result.get("datasets") or {}
         record = {
@@ -105,7 +113,7 @@ def generate_report(payload: GenerateReportRequest, user: User = Depends(get_wor
             "formats": sorted(requested & {"pdf", "csv"}), "interpretationStatus": interpretation_status,
             "beforeAfterImagesIncluded": "earlier_rgb" in thumbnails and "later_rgb" in thumbnails,
         }
-        row = Report(id=report_id, owner_id=user.id, analysis_id=payload.analysis_id, title=title, status="completed", artifact_uri=str(directory), geojson_available=False, metadata_json=record)
+        row = Report(id=report_id, owner_id=user.id, analysis_id=payload.analysis_id, title=title, status="completed", artifact_uri=artifact_uri, pdf_artifact=artifacts.get("pdf"), csv_artifact=artifacts.get("csv"), geojson_available=False, metadata_json=record)
         db.add(row); db.commit()
         return {"report": record}
     except Exception as exc:
@@ -141,7 +149,12 @@ def download_report(report_id: str, format: str = Query(pattern="^(pdf|csv|geojs
         raise HTTPException(status_code=422, detail="This analysis has raster layers but no compatible vector output")
     if format not in metadata.get("formats", []):
         raise HTTPException(status_code=404, detail="Requested format is unavailable")
-    path = Path(row.artifact_uri or "") / f"{report_id}.{format}"
-    if not path.is_file(): raise HTTPException(status_code=410, detail="Report artifact is unavailable")
     media_type = "application/pdf" if format == "pdf" else "text/csv"
-    return FileResponse(path, media_type=media_type, filename=f"{report_id}.{format}")
+    filename = f"{report_id}.{format}"
+    path = Path(row.artifact_uri) / filename if row.artifact_uri else None
+    if path is not None and path.is_file():
+        return FileResponse(path, media_type=media_type, filename=filename)
+    content = row.pdf_artifact if format == "pdf" else row.csv_artifact
+    if content:
+        return Response(content=content, media_type=media_type, headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+    raise HTTPException(status_code=410, detail="Report artifact is unavailable")

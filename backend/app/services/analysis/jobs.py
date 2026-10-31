@@ -125,39 +125,25 @@ def get_job(analysis_id: str):
     return None
 
 
-def get_layer_tiles(analysis_id: str):
-    with _lock:
-        job = _jobs.get(analysis_id)
-        if not job:
-            job = None
-        if job is None:
-            pass
-        elif job["status"] != "completed":
-            return job, "not_ready"
-        elif job.get("layer_images") is None:
-            return job, "layers_unavailable"
-        else:
-            layer_images = dict(job["layer_images"])
-            kind = job["analysis_type"]
-    if job is None:
-        persisted = get_job(analysis_id)
-        if not persisted:
-            return None, "not_found"
-        if persisted["status"] != "completed":
-            return persisted, "not_ready"
-        return persisted, "layers_unavailable"
+_LAYER_KINDS = ("vegetation", "water", "urban")
+
+
+def _visualization(kind: str, name: str) -> dict:
+    if name == "change":
+        return VISUALIZATION[kind]
+    if name in ("earlier_rgb", "later_rgb"):
+        return {"bands": ["red", "green", "blue"], "min": 0.0, "max": 0.3}
+    if name in ("earlier_index", "later_index"):
+        return {"min": -1, "max": 1, "palette": ["#762a83", "#f7f7f7", "#1b7837"]}
+    if name == "water_extent_later":
+        return {"min": 0, "max": 1, "palette": ["#f7f7f7", "#2166ac"]}
+    return {"min": -1, "max": 1, "palette": ["#f7f7f7", "#b2182b"]}
+
+
+def _render_layer_tiles(kind: str, layer_images: dict):
     output = []
     for name, image in layer_images.items():
-        if name == "change":
-            visualization = VISUALIZATION[kind]
-        elif name in ("earlier_rgb", "later_rgb"):
-            visualization = {"bands": ["red", "green", "blue"], "min": 0.0, "max": 0.3}
-        elif name in ("earlier_index", "later_index"):
-            visualization = {"min": -1, "max": 1, "palette": ["#762a83", "#f7f7f7", "#1b7837"]}
-        elif name == "water_extent_later":
-            visualization = {"min": 0, "max": 1, "palette": ["#f7f7f7", "#2166ac"]}
-        else:
-            visualization = {"min": -1, "max": 1, "palette": ["#f7f7f7", "#b2182b"]}
+        visualization = _visualization(kind, name)
         map_info = image.getMapId(visualization)
         output.append({
             "name": name,
@@ -165,7 +151,59 @@ def get_layer_tiles(analysis_id: str):
             "tile_url_template": map_info["tile_fetcher"].url_format,
             "visualization": visualization,
         })
-    return output, "ready"
+    return output
+
+
+def _rebuild_layer_images(job: dict) -> dict:
+    """Earth Engine map ids are process-local, so rebuild them from the saved request.
+
+    Persisted analyses keep their original numerical result; only the display
+    images are recomputed when a new backend instance serves the layers endpoint.
+    """
+    kind = job.get("analysis_type")
+    request = job.get("request")
+    if kind not in _LAYER_KINDS or not isinstance(request, dict) or not request:
+        return job
+    try:
+        rebuilt = change_detection_engine.analyze(kind, dict(request))
+        layer_images = rebuilt.get("_layer_images")
+    except Exception:
+        logger.warning("Could not rebuild map layers for completed analysis %s", job.get("analysis_id"))
+        return job
+    if not layer_images:
+        return job
+    with _lock:
+        cached = _jobs.get(job["analysis_id"])
+        if cached is not None and cached.get("status") == "completed":
+            cached["layer_images"] = layer_images
+            return dict(cached)
+    job = dict(job)
+    job["layer_images"] = layer_images
+    return job
+
+
+def get_layer_tiles(analysis_id: str):
+    with _lock:
+        job = _jobs.get(analysis_id)
+        if job is not None and job["status"] != "completed":
+            return dict(job), "not_ready"
+        if job is not None:
+            job = dict(job)
+    if job is None:
+        job = get_job(analysis_id)
+        if not job:
+            return None, "not_found"
+        if job["status"] != "completed":
+            return job, "not_ready"
+    if job.get("layer_images") is None:
+        job = _rebuild_layer_images(job)
+    if job.get("layer_images") is None:
+        return job, "layers_unavailable"
+    try:
+        return _render_layer_tiles(job["analysis_type"], job["layer_images"]), "ready"
+    except Exception:
+        logger.exception("Could not generate map tiles for analysis %s", analysis_id)
+        return job, "layers_unavailable"
 
 
 def run_trend_job(analysis_id: str) -> None:

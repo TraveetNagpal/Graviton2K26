@@ -148,7 +148,7 @@ updateLayerUrl('vegetation-ndvi', 'https://tiles.terramind.ai/ndvi/{z}/{x}/{y}.p
 toggleLayerVisibility('vegetation-ndvi'); // make it visible
 ```
 
-The 2D (MapLibre) and 3D (CesiumJS) views both consume layer URLs from the store and render them automatically.
+The 2D (MapLibre) and 3D (CesiumJS) views both consume layer URLs from the store and render them automatically. Earth Engine tile tokens are short-lived and tied to the serving process; the layers endpoint rebuilds them from the persisted analysis request when they are missing.
 
 ---
 
@@ -205,7 +205,8 @@ and records whether both were included; the raster layer endpoint remains the
 source for interactive maps. CSV contains only available tabular measurements. GeoJSON is
 exposed only for actual compatible vector output; raster tiles/images must
 never be converted or advertised as GeoJSON. Downloads are served by the same
-report download endpoint.
+report download endpoint; artifact bytes are stored with the report record, so
+downloads remain valid after a restart.
 
 Example completed record:
 

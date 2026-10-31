@@ -64,6 +64,9 @@ def test_completed_analysis_generates_traceable_pdf_and_measurement_csv(tmp_path
     assert report["sourceAnalysisId"] == analysis_id
     assert report["observationDates"] == ["2025-01-01", "2026-01-01"]
     assert db.row.owner_id == 1
+    assert db.row.pdf_artifact.startswith(b"%PDF")
+    assert b"mapped_increase_area_ha,2.5,ha" in db.row.csv_artifact
+    assert b"mean_ndvi_difference,,index" not in db.row.csv_artifact
     assert (tmp_path / f"{report['id']}.pdf").read_bytes().startswith(b"%PDF")
     csv_text = (tmp_path / f"{report['id']}.csv").read_text(encoding="utf-8")
     assert "mapped_increase_area_ha,2.5,ha" in csv_text

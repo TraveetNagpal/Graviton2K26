@@ -83,7 +83,7 @@ Run tests from `backend/` using `pytest`. Earth Engine credentials are not requi
 
 The `/reports` page lists the workspace report history and lets you submit a source analysis ID for report generation. Configure `VITE_API_BASE_URL` to the API root (for example `http://localhost:8000/api`). The API implements `POST /reports/generate`, `GET /reports`, `GET /reports/{report_id}`, and artifact downloads. See [the API and integration contract](docs/map-integration.md#module-9--reports-and-exports) for response shape, provenance, and artifact requirements.
 
-The report service now builds PDF and CSV artifacts from completed backend analysis records. The frontend does not fabricate analysis values; GeoJSON is offered only when compatible vector output exists (the current change layers are rasters, so GeoJSON is disabled).
+The report service now builds PDF and CSV artifacts from completed backend analysis records. Artifact bytes are stored with the report row in PostgreSQL, so downloads keep working after restarts and on read-only serverless filesystems; `REPORT_STORAGE_DIR` is only an optional local streaming cache. The frontend does not fabricate analysis values; GeoJSON is offered only when compatible vector output exists (the current change layers are rasters, so GeoJSON is disabled).
 
 ## Module 10 — local deployment
 
@@ -130,7 +130,7 @@ Import this repository into Vercel with the repository root as the project root,
 - Earth Engine credentials: `GEE_PROJECT`, `GEE_AUTH_MODE=service_account`, `GEE_SERVICE_ACCOUNT`, and `GEE_PRIVATE_KEY_B64` (base64 of the service-account JSON, e.g. `base64 -i key.json | tr -d '\n'`). `GEE_PRIVATE_KEY_JSON` also works.
 - `GEMINI_API_KEY` — Google AI Studio key used server-side for the Earth Investigator and report interpretations. `GEMINI_MODEL` defaults to `gemini-3.5-flash`; `GEMINI_BASE_URL` and `GEMINI_TIMEOUT_SECONDS` are optional.
 - `PERSIST_ANALYSIS_JOBS=true` so job status survives function instances.
-- `REPORT_STORAGE_DIR=/tmp/terramind-reports` if report generation is enabled.
+- `REPORT_STORAGE_DIR` is optional. Report artifacts are persisted in PostgreSQL, so no writable directory is required.
 - `MONITORING_SCHEDULER_ENABLED=false` and `MONITOR_SCHEDULER_ENABLED=false`; Vercel functions do not provide a persistent process for the in-process schedulers.
 - `CORS_ORIGINS` — comma-separated allowed browser origins (`*` is fine for a public demo).
 
@@ -143,7 +143,7 @@ cd backend
 DATABASE_URL='postgresql+psycopg://…' alembic upgrade head
 ```
 
-Vercel's function filesystem is temporary: reports written under `/tmp` are not durable, and Earth Engine tile-map objects remain process-local. Use durable object storage for generated report artifacts and a persistent worker/queue for scheduled monitoring before relying on those features in production. `vercel dev -L` runs the configured services locally without linking a Vercel project.
+Report artifacts are durable because their bytes live in PostgreSQL. Earth Engine tile-map objects remain process-local, but the layers endpoint rebuilds them from the persisted analysis request on a new instance. Module 8 monitoring data uses a SQLite file; on Vercel it falls back to `/tmp`, which is per-instance and ephemeral, so use Docker or a persistent disk for durable scheduled monitoring. `vercel dev -L` runs the configured services locally without linking a Vercel project.
 
 ### Serverless analysis behavior
 
