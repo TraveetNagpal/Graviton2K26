@@ -1,3 +1,6 @@
+
+Hi, this project is for the Graviton Hackathon 2026 at CGC University. We selected the "Space" theme for this hackathon.
+
 # TerraMind AI — Graviton 2K26
 
 TerraMind AI is a satellite imagery analysis project for the 2026 CGC University Graviton hackathon.
@@ -120,3 +123,4 @@ Import this repository into Vercel with the repository root as the project root,
 - `MONITORING_SCHEDULER_ENABLED=false` and `MONITOR_SCHEDULER_ENABLED=false`; Vercel functions do not provide a persistent process for the in-process schedulers
 
 The database schema must be migrated before protected database-backed endpoints are used (`cd backend && alembic upgrade head`). Vercel's function filesystem is temporary: reports written under `/tmp` are not durable, and Earth Engine tile-map objects remain process-local. Use durable object storage for generated report artifacts and a persistent worker/queue for scheduled monitoring before relying on those features in production. `vercel dev -L` runs the configured services locally without linking a Vercel project.
+
