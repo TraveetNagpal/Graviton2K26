@@ -12,7 +12,7 @@
  *  - Rendering active selection as a Cesium entity
  */
 
-import { useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Viewer,
   Entity,
@@ -39,6 +39,7 @@ import {
   buildCircleSelection,
   validateSelection,
 } from '@/utils/geoUtils';
+import { GOOGLE_ATTRIBUTION, getGoogleTileSession, googleMapsEnabled, googleTileUrlTemplate } from '@/utils/googleMaps';
 import type { LngLat } from '@/types';
 
 // Suppress Cesium Ion token warning – we use OSM tiles only
@@ -66,6 +67,32 @@ export default function GlobeView() {
   const setActiveSelection = useExplorerStore((s) => s.setActiveSelection);
   const addSelectionPoint = useExplorerStore((s) => s.addSelectionPoint);
   const resetSelectionInProgress = useExplorerStore((s) => s.resetSelectionInProgress);
+
+  // ── Google satellite basemap ──────────────────────────────────────────────
+
+  const [googleTilesUrl, setGoogleTilesUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!googleMapsEnabled()) return;
+    let active = true;
+    void getGoogleTileSession().then((session) => {
+      if (active && session) setGoogleTilesUrl(googleTileUrlTemplate(session));
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const baseImagery = useMemo(
+    () =>
+      googleTilesUrl
+        ? new UrlTemplateImageryProvider({ url: googleTilesUrl, credit: GOOGLE_ATTRIBUTION })
+        : new OpenStreetMapImageryProvider({
+            url: 'https://tile.openstreetmap.org/',
+            credit: '© OpenStreetMap contributors',
+          }),
+    [googleTilesUrl]
+  );
 
   // ── Click handler ──────────────────────────────────────────────────────────
 
@@ -246,12 +273,7 @@ export default function GlobeView() {
       terrainProvider={new EllipsoidTerrainProvider()}
       style={{ width: '100%', height: '100%' }}
     >
-      <ImageryLayer
-        imageryProvider={new OpenStreetMapImageryProvider({
-          url: 'https://tile.openstreetmap.org/',
-          credit: '© OpenStreetMap contributors',
-        })}
-      />
+      <ImageryLayer key={googleTilesUrl ? 'google-basemap' : 'osm-basemap'} imageryProvider={baseImagery} />
       {/* Satellite / analysis overlay layers */}
       {visibleRasterLayers.map((layer) => (
         <ImageryLayer
@@ -271,9 +293,9 @@ export default function GlobeView() {
         <Entity>
           <PolygonGraphics
             hierarchy={polygonHierarchy}
-            material={Color.fromCssColorString('#22d3ee').withAlpha(0.25)}
+            material={Color.fromCssColorString('#6fa8ff').withAlpha(0.25)}
             outline
-            outlineColor={Color.fromCssColorString('#22d3ee')}
+            outlineColor={Color.fromCssColorString('#6fa8ff')}
             outlineWidth={2}
           />
         </Entity>
@@ -284,7 +306,7 @@ export default function GlobeView() {
         <Entity position={pointPos}>
           <PointGraphics
             pixelSize={12}
-            color={Color.fromCssColorString('#22d3ee')}
+            color={Color.fromCssColorString('#6fa8ff')}
             outlineColor={Color.WHITE}
             outlineWidth={2}
           />

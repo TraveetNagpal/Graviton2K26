@@ -2,13 +2,20 @@
 import os
 from functools import lru_cache
 
-from pydantic import Field, model_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy.engine import make_url
+
+_LOCAL_DATABASE_URL = "postgresql+psycopg://terramind:terramind@localhost:5432/terramind"
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
-    database_url: str = Field(default="postgresql+psycopg://terramind:terramind@localhost:5432/terramind", validation_alias="DATABASE_URL")
+    # Neon's Vercel integration exposes DATABASE_URL plus POSTGRES_URL variants.
+    database_url: str = Field(
+        default=_LOCAL_DATABASE_URL,
+        validation_alias=AliasChoices("DATABASE_URL", "POSTGRES_URL", "POSTGRES_URL_NON_POOLING", "NEON_DATABASE_URL"),
+    )
     cors_origins: str = Field(default="*", validation_alias="CORS_ORIGINS")
     environment: str = Field(default="development", validation_alias="ENVIRONMENT")
     auth_secret: str = Field(default="", validation_alias="AUTH_SECRET")
@@ -18,6 +25,18 @@ class Settings(BaseSettings):
     persist_analysis_jobs: bool = Field(default=False, validation_alias="PERSIST_ANALYSIS_JOBS")
     monitoring_scheduler_enabled: bool = Field(default=False, validation_alias="MONITORING_SCHEDULER_ENABLED")
     inline_analysis: bool = Field(default=False, validation_alias="INLINE_ANALYSIS")
+    auto_migrate: bool = Field(default=False, validation_alias=AliasChoices("AUTO_MIGRATE", "MIGRATE_ON_STARTUP"))
+
+    @field_validator("database_url")
+    @classmethod
+    def normalize_database_url(cls, value: str) -> str:
+        """Accept plain postgres URLs from managed providers and add TLS for remote hosts."""
+        url = make_url(value.strip() or _LOCAL_DATABASE_URL)
+        if url.drivername in ("postgres", "postgresql"):
+            url = url.set(drivername="postgresql+psycopg")
+        if url.host not in (None, "localhost", "127.0.0.1", "::1") and "sslmode" not in url.query:
+            url = url.update_query_dict({"sslmode": "require"})
+        return url.render_as_string(hide_password=False)
 
     @model_validator(mode="after")
     def strong_auth_secret(self):
@@ -32,11 +51,23 @@ def get_settings() -> Settings:
 
 
 class AISettings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
-    api_key: str = Field(default="", validation_alias="LLM_API_KEY")
-    model: str = Field(default="", validation_alias="LLM_MODEL")
-    base_url: str = Field(default="https://api.openai.com/v1", validation_alias="LLM_BASE_URL")
-    timeout_seconds: float = Field(default=20, gt=0, le=120, validation_alias="LLM_TIMEOUT_SECONDS")
+    """Gemini configuration for every AI interpretation in the backend.
+
+    Gemini is reached through Google's OpenAI-compatible API, so the
+    investigator keeps one chat-completions code path. The legacy LLM_*
+    variables remain accepted as aliases for existing deployments.
+    """
+
+    # Read the backend .env first and fall back to the repository-root .env that
+    # local development uses for shared secrets (later files win).
+    model_config = SettingsConfigDict(env_file=("../.env", ".env"), extra="ignore")
+    api_key: str = Field(default="", validation_alias=AliasChoices("GEMINI_API_KEY", "LLM_API_KEY"))
+    model: str = Field(default="gemini-3.5-flash", validation_alias=AliasChoices("GEMINI_MODEL", "LLM_MODEL"))
+    base_url: str = Field(
+        default="https://generativelanguage.googleapis.com/v1beta/openai",
+        validation_alias=AliasChoices("GEMINI_BASE_URL", "LLM_BASE_URL"),
+    )
+    timeout_seconds: float = Field(default=30, gt=0, le=120, validation_alias=AliasChoices("GEMINI_TIMEOUT_SECONDS", "LLM_TIMEOUT_SECONDS"))
 
 
 @lru_cache
@@ -48,3 +79,8 @@ def run_analysis_inline() -> bool:
     """Serverless platforms freeze the instance after the response, so completed
     background work cannot be relied on. Vercel sets VERCEL=1."""
     return get_settings().inline_analysis or os.environ.get("VERCEL") == "1"
+
+
+def should_auto_migrate() -> bool:
+    """Apply Alembic migrations during startup, including on Vercel by default."""
+    return get_settings().auto_migrate or os.environ.get("VERCEL") == "1"

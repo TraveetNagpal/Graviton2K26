@@ -19,7 +19,25 @@ export default defineConfig({
     CESIUM_BASE_URL: JSON.stringify('/'),
   },
   optimizeDeps: {
+    // Cesium is served as source, so pre-bundle the CommonJS packages it
+    // imports; otherwise their default exports break in the browser.
     exclude: ['cesium'],
+    include: [
+      'autolinker',
+      'bitmap-sdf',
+      'dompurify',
+      'earcut',
+      'grapheme-splitter',
+      'jsep',
+      'kdbush',
+      'lerc',
+      'mersenne-twister',
+      'nosleep.js',
+      'pako/lib/inflate.js',
+      'rbush',
+      'topojson-client',
+      'urijs',
+    ],
   },
   server: {
     proxy: {

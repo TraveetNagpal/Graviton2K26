@@ -1,7 +1,8 @@
 /**
  * MapView – 2-D map powered by MapLibre GL JS.
  *
- * Basemap: OSM raster tiles (Stadia Maps CDN provides a clean OSM style).
+ * Basemap: Google satellite imagery when VITE_GOOGLE_MAPS_API_KEY is set,
+ * otherwise OpenStreetMap raster tiles.
  * Handles all selection modes and renders active selection as GeoJSON layers.
  */
 
@@ -9,6 +10,7 @@ import { useRef, useEffect } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { useExplorerStore } from '@/store';
+import { googleMapsEnabled, googleRasterStyle } from '@/utils/googleMaps';
 import {
   buildPointSelection,
   buildRectangleSelection,
@@ -18,7 +20,7 @@ import {
 } from '@/utils/geoUtils';
 import type { LngLat } from '@/types';
 
-// OSM-compatible raster style – no API key needed
+// OpenStreetMap fallback style – no API key needed
 const OSM_STYLE: maplibregl.StyleSpecification = {
   version: 8,
   sources: {
@@ -70,64 +72,58 @@ export default function MapView() {
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
-    const map = new maplibregl.Map({
-      container: containerRef.current,
-      style: OSM_STYLE,
-      center: [initialCamera.longitude, initialCamera.latitude],
-      zoom: 3,
-      attributionControl: { compact: true },
-    });
+    let cancelled = false;
+    let map: maplibregl.Map | null = null;
 
-
-    map.on('load', () => {
+    const setupOverlays = (instance: maplibregl.Map) => {
       // ── Selection source + layers ────────────────────────────────────────
-      map.addSource(SELECTION_SOURCE_ID, {
+      instance.addSource(SELECTION_SOURCE_ID, {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
       });
 
-      map.addLayer({
+      instance.addLayer({
         id: SELECTION_FILL_LAYER,
         type: 'fill',
         source: SELECTION_SOURCE_ID,
         filter: ['==', '$type', 'Polygon'],
         paint: {
-          'fill-color': '#22d3ee',
+          'fill-color': '#6fa8ff',
           'fill-opacity': 0.2,
         },
       });
 
-      map.addLayer({
+      instance.addLayer({
         id: SELECTION_LINE_LAYER,
         type: 'line',
         source: SELECTION_SOURCE_ID,
         filter: ['==', '$type', 'Polygon'],
         paint: {
-          'line-color': '#22d3ee',
+          'line-color': '#6fa8ff',
           'line-width': 2,
         },
       });
 
-      map.addLayer({
+      instance.addLayer({
         id: SELECTION_POINT_LAYER,
         type: 'circle',
         source: SELECTION_SOURCE_ID,
         filter: ['==', '$type', 'Point'],
         paint: {
           'circle-radius': 8,
-          'circle-color': '#22d3ee',
+          'circle-color': '#6fa8ff',
           'circle-stroke-color': '#ffffff',
           'circle-stroke-width': 2,
         },
       });
 
       // ── Preview source (in-progress vertices) ───────────────────────────
-      map.addSource(PREVIEW_SOURCE_ID, {
+      instance.addSource(PREVIEW_SOURCE_ID, {
         type: 'geojson',
         data: { type: 'FeatureCollection', features: [] },
       });
 
-      map.addLayer({
+      instance.addLayer({
         id: PREVIEW_POINT_LAYER,
         type: 'circle',
         source: PREVIEW_SOURCE_ID,
@@ -138,19 +134,38 @@ export default function MapView() {
           'circle-stroke-width': 1,
         },
       });
-    });
+    };
 
-    // Track camera movement
-    map.on('moveend', () => {
-      const c = map.getCenter();
-      const z = map.getZoom();
-      setCamera({ longitude: c.lng, latitude: c.lat, altitude: z });
-    });
+    void (async () => {
+      const googleStyle = googleMapsEnabled() ? await googleRasterStyle() : null;
+      if (cancelled || !containerRef.current) return;
 
-    mapRef.current = map;
+      map = new maplibregl.Map({
+        container: containerRef.current,
+        style: googleStyle ?? OSM_STYLE,
+        center: [initialCamera.longitude, initialCamera.latitude],
+        zoom: 3,
+        attributionControl: { compact: true },
+      });
+
+      map.on('load', () => {
+        if (map) setupOverlays(map);
+      });
+
+      // Track camera movement
+      map.on('moveend', () => {
+        if (!map) return;
+        const c = map.getCenter();
+        const z = map.getZoom();
+        setCamera({ longitude: c.lng, latitude: c.lat, altitude: z });
+      });
+
+      mapRef.current = map;
+    })();
 
     return () => {
-      map.remove();
+      cancelled = true;
+      map?.remove();
       mapRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
