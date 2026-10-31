@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse
 from shapely.geometry import shape
 from shapely.validation import explain_validity
 
-
+from app.core.config import run_analysis_inline
 from app.schemas.contracts import HistoricalTrendRequest, VegetationAnalysisRequest, WaterAnalysisRequest, UrbanAnalysisRequest
 from app.services.analysis.jobs import get_job, get_layer_tiles, run_job, run_trend_job, submit
 from app.core.security import get_current_user
@@ -12,6 +12,26 @@ from app.models.schema import User
 
 
 router = APIRouter(prefix="/analysis", tags=["Change analysis"])
+
+_FAILURE_STATUS = {
+    "analysis_not_suitable": 422,
+    "earth_engine_quota_exceeded": 429,
+    "earth_engine_authentication_error": 503,
+}
+
+
+def analysis_status_code(job: dict) -> int:
+    code = (job.get("error") or {}).get("code")
+    return 200 if job["status"] == "completed" else _FAILURE_STATUS.get(code, 502)
+
+
+def public_job(job: dict) -> dict:
+    response = {key: value for key, value in job.items() if key not in ("request", "layer_images", "cache_key")}
+    if job["status"] == "completed":
+        response.update(job["result"])
+    else:
+        response.pop("result", None)
+    return response
 
 
 def _submit(kind, payload, background_tasks, user):
@@ -28,11 +48,13 @@ def _submit(kind, payload, background_tasks, user):
     except Exception as exc:
         raise HTTPException(status_code=422, detail={"error": "invalid_area", "detail": str(exc)}) from exc
     request = payload.model_dump(mode="json")
-
     analysis_id = submit(kind, request, owner_id=user.id)
+    if run_analysis_inline():
+        run_job(analysis_id)
+        job = get_job(analysis_id)
+        return JSONResponse(status_code=analysis_status_code(job), content=public_job(job))
+    background_tasks.add_task(run_job, analysis_id)
     job = get_job(analysis_id)
-    if job["status"] == "accepted":
-        background_tasks.add_task(run_job, analysis_id)
 
     return JSONResponse(status_code=202, content={
         "analysis_id": analysis_id,
@@ -77,6 +99,10 @@ def analyze_trend(payload: HistoricalTrendRequest, background_tasks: BackgroundT
         raise HTTPException(status_code=422, detail={"error": "invalid_area", "detail": str(exc)}) from exc
     request = payload.model_dump(mode="json")
     analysis_id = submit("trend", request, owner_id=user.id)
+    if run_analysis_inline():
+        run_trend_job(analysis_id)
+        job = get_job(analysis_id)
+        return JSONResponse(status_code=analysis_status_code(job), content=public_job(job))
     job = get_job(analysis_id)
     if job["status"] == "accepted":
         background_tasks.add_task(run_trend_job, analysis_id)
@@ -92,7 +118,6 @@ def get_analysis(analysis_id: str, user: User = Depends(get_current_user)):
     job = get_job(analysis_id)
     if not job:
         raise HTTPException(status_code=404, detail="Analysis not found")
-
     if job.get("owner_id") != user.id:
         raise HTTPException(status_code=404, detail="Analysis not found")
     response = {key: value for key, value in job.items() if key not in ("request", "layer_images", "cache_key", "result")}
@@ -107,7 +132,7 @@ def get_analysis_layers(analysis_id: str, user: User = Depends(get_current_user)
     job = get_job(analysis_id)
     if not job or job.get("owner_id") != user.id:
         raise HTTPException(status_code=404, detail="Analysis not found")
-    if job and job["analysis_type"] == "trend":
+    if job["analysis_type"] == "trend":
         raise HTTPException(status_code=409, detail="Select a completed trend point to retrieve its paired analysis layers")
 
     result, state = get_layer_tiles(analysis_id)

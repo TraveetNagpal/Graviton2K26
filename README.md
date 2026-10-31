@@ -11,11 +11,11 @@ The backend is a FastAPI service. Install and run it from `backend/`:
 
 ```sh
 python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 uvicorn app.main:app --reload
 ```
 
-API documentation is available at `http://localhost:8000/docs`.
+`requirements.txt` contains runtime dependencies only; `requirements-dev.txt` adds pytest. API documentation is available at `http://localhost:8000/docs`.
 
 ### Earth Engine setup
 
@@ -54,7 +54,7 @@ The root Vite app's Earth Explorer includes a Historical timeline panel. It uses
 
 To calculate a timeline, choose at least two selected actual observations and a baseline, then submit `POST /api/analysis/trend`. Each selected date is measured against that baseline using the existing Module 5 preprocessing and Earth Engine analysis functions. The request supports up to 30 dates; the response is a standard analysis job polled at `GET /api/analysis/{analysis_id}`. Completed points include measured NDVI, threshold-mapped water area, or NDBI built-up proxy area, valid coverage, warnings, paired analysis IDs, and layer URLs. Failed/insufficient observations have `status: unavailable` and `value: null`; they are not charted as zero. The interface exposes missing date buckets and does not interpolate missing measurement values. Sensor mixtures and observations from differing months receive comparability warnings.
 
-Exact duplicate analysis requests reuse an accepted, running, or completed job within the current backend process. Cache and jobs are process-local and are lost on restart; use the durable task queue/database before production or multi-worker deployment. Trend computation is a sequence of baseline comparisons, so large selections can take time; narrow date range or use a coarser observation frequency. Configure `FRONTEND_ORIGINS` on the backend for browser access and `VITE_API_BASE_URL` in the Vite app (the latter is a public URL only and must never contain credentials).
+Exact duplicate analysis requests reuse an accepted, running, or completed job within the current backend process. Cache and jobs are process-local and are lost on restart; use the durable task queue/database before production or multi-worker deployment. Trend computation is a sequence of baseline comparisons, so large selections can take time; narrow date range or use a coarser observation frequency. Configure `CORS_ORIGINS` on the backend for browser access and `VITE_API_BASE_URL` in the Vite app (the latter is a public URL only and must never contain credentials).
 
 Run the main web app from the repository root with `npm install` then `npm run dev`; Vite proxies same-origin `/api` requests to the backend on port 8000.
 
@@ -77,6 +77,7 @@ Monitoring run and alert records survive restart. Existing Module 5 tile layer o
 Sentinel-2 standardized six-band output defaults to 20 m to respect its native SWIR resolution; Landsat defaults to 30 m. Cross-sensor comparisons should use a common 30 m grid. Scene-level cloud metadata is not a substitute for AOI valid-pixel coverage, which is a clear-support proxy and not a guarantee of cloud-free pixels.
 
 Run tests from `backend/` using `pytest`. Earth Engine credentials are not required for the local array QA tests. A real catalog integration check requires an authorized Earth Engine project and credentials.
+
 ## Reports (Module 9)
 
 The `/reports` page lists the signed-in user's report history and lets them submit a source analysis ID for report generation. Configure `VITE_API_BASE_URL` to the API root (for example `http://localhost:8000/api`). The API implements `POST /reports/generate`, `GET /reports`, `GET /reports/{report_id}`, and owner-authorized artifact downloads. See [the API and integration contract](docs/map-integration.md#module-9--reports-and-exports) for response shape, authorization, provenance, and artifact requirements.
@@ -124,3 +125,12 @@ Import this repository into Vercel with the repository root as the project root,
 
 The database schema must be migrated before protected database-backed endpoints are used (`cd backend && alembic upgrade head`). Vercel's function filesystem is temporary: reports written under `/tmp` are not durable, and Earth Engine tile-map objects remain process-local. Use durable object storage for generated report artifacts and a persistent worker/queue for scheduled monitoring before relying on those features in production. `vercel dev -L` runs the configured services locally without linking a Vercel project.
 
+### Serverless analysis behavior
+
+Vercel freezes a function instance after its response, and the analysis registry is process-local. When `VERCEL=1` is present (Vercel sets it automatically), the analysis endpoints execute the Earth Engine work inside the HTTP request and return the completed result directly instead of `202 Accepted`. Set `INLINE_ANALYSIS=true` to force the same behavior elsewhere; local and container deployments without it keep the asynchronous `202` + polling flow. As a result:
+
+- Vercel analysis requests must complete within the function duration limit (300 s is configured in `backend/vercel.json`).
+- `/api/analysis/{id}/layers` is scoped to the instance that ran the job and may return `404` after a redeploy, cold start, or different instance. Map-layer links are best effort.
+- For durable asynchronous jobs and stable layer links, run the backend as a long-lived container (the included `Dockerfile`) on Render, Fly.io, Cloud Run, or Railway, and point `VITE_API_BASE_URL` at that service.
+
+The root package builds with `npm run build` (Vite); run `npm run type-check` separately when changing TypeScript. The restored Next.js app under `frontend/` can alternatively be deployed as its own project with **Root Directory** `frontend/` and `NEXT_PUBLIC_API_BASE_URL=https://<backend>/api`.

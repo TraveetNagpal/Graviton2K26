@@ -62,6 +62,41 @@ def test_cause_question_is_explicitly_unestablished():
     llm.assert_not_awaited()
 
 
+def test_inline_launch_returns_completed_investigation_in_one_request():
+    parameters = {
+        "earlier_image_id": "COPERNICUS/S2_SR_HARMONIZED/first",
+        "earlier_dataset": "sentinel-2",
+        "later_image_id": "COPERNICUS/S2_SR_HARMONIZED/second",
+        "later_dataset": "sentinel-2",
+        "area_of_interest": AOI,
+    }
+
+    def fake_analyze(kind, request):
+        return {
+            "analysis_id": request["analysis_id"], "analysis_type": kind, "status": "completed",
+            "region": AOI, "observation_dates": {"earlier": "2024-01-01", "later": "2024-02-01"},
+            "datasets": {}, "analysis_method": "NDVI difference", "parameters": {},
+            "valid_pixel_coverage_percent": 76.5,
+            "measurements": {"mean_ndvi_earlier": 0.4, "mean_ndvi_later": 0.2, "mean_ndvi_difference": -0.2},
+            "quality_warnings": [], "uncertainty": {"description": "Not a calibrated probability."},
+            "change_layer": {"name": "change", "layers_endpoint": f"/api/analysis/{request['analysis_id']}/layers"},
+            "_layer_images": {},
+        }
+
+    with patch("app.api.v1.endpoints.ai.run_analysis_inline", return_value=True), \
+            patch("app.services.analysis.jobs.change_detection_engine.analyze", side_effect=fake_analyze), \
+            patch("app.api.v1.endpoints.ai.explain", new=AsyncMock(return_value=("The index declined.", "available"))):
+        response = client.post("/api/ai/investigate", json={
+            "question": "Summarize vegetation change",
+            "analysis": {"analysis_type": "vegetation", "parameters": parameters},
+        })
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "completed"
+    assert "0.4000 to 0.2000" in body["finding"]
+    assert body["evidence"]["analysis_type"] == "vegetation"
+
+
 def test_analysis_launch_validates_area_before_creating_job():
     response = client.post("/api/ai/investigate", json={
         "question": "Summarize vegetation change", "region": {"type": "Point", "coordinates": [77, 12]},
