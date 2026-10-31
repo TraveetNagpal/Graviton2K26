@@ -3,11 +3,13 @@ from fastapi.responses import JSONResponse
 
 from app.api.v1.endpoints.satellite import router as satellite_router
 from app.api.v1.endpoints.analysis import router as analysis_router
+from app.api.v1.endpoints.ai import router as ai_router
 from app.services.earth_engine.errors import EarthEngineError
 
 app = FastAPI(title="TerraMind AI API")
 app.include_router(satellite_router, prefix="/api")
 app.include_router(analysis_router, prefix="/api")
+app.include_router(ai_router, prefix="/api")
 
 
 @app.exception_handler(EarthEngineError)
