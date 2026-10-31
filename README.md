@@ -20,7 +20,7 @@ uvicorn app.main:app --reload
 ### Earth Engine setup
 
 1. Create/select a Google Cloud project, register it for Google Earth Engine, enable the Earth Engine API, and authorize the service identity for Earth Engine access.
-2. From the repository root, copy `.env.example` to `backend/.env`. Configure `GEE_PROJECT`, `GEE_SERVICE_ACCOUNT` and either `GEE_PRIVATE_KEY_JSON` (the entire service-account JSON document) or `GEE_PRIVATE_KEY_FILE`. Workload identity can be used with `GEE_AUTH_MODE=ambient`. On Vercel, use `GEE_PRIVATE_KEY_B64` (base64 of the JSON file) so newlines survive the environment variable.
+2. From the repository root, copy `.env.example` to `backend/.env` (a repository-root `.env` is also read as a fallback). Configure `GEE_PROJECT`, `GEE_SERVICE_ACCOUNT` and either `GEE_PRIVATE_KEY_JSON` (the entire service-account JSON document) or `GEE_PRIVATE_KEY_FILE`. Workload identity can be used with `GEE_AUTH_MODE=ambient`. On Vercel, use `GEE_PRIVATE_KEY_B64` (base64 of the JSON file) so newlines survive the environment variable.
 3. Keep private keys in a secret manager or protected runtime mount. Never commit `.env` or expose credentials to frontend code.
 4. The optional Google Maps satellite basemap uses `VITE_GOOGLE_MAPS_API_KEY` (see [map credentials](docs/map-integration.md#map-credentials)). This is a public browser key; restrict it by HTTP referrer. Without it the maps fall back to OpenStreetMap.
 

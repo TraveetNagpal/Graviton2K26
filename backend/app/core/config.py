@@ -10,7 +10,9 @@ _LOCAL_DATABASE_URL = "postgresql+psycopg://terramind:terramind@localhost:5432/t
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    # Read the backend .env first and fall back to the repository-root .env that
+    # local development uses for shared secrets (later files win).
+    model_config = SettingsConfigDict(env_file=("../.env", ".env"), extra="ignore")
     # Neon's Vercel integration exposes DATABASE_URL plus POSTGRES_URL variants.
     database_url: str = Field(
         default=_LOCAL_DATABASE_URL,

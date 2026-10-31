@@ -4,7 +4,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class EarthEngineSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    # Match the application settings: backend/.env first, repository-root .env as fallback.
+    model_config = SettingsConfigDict(env_file=("../.env", ".env"), extra="ignore")
     project: str = Field(default="", validation_alias="GEE_PROJECT")
     service_account: str = Field(default="", validation_alias="GEE_SERVICE_ACCOUNT")
     private_key_json: str = Field(default="", validation_alias="GEE_PRIVATE_KEY_JSON")
