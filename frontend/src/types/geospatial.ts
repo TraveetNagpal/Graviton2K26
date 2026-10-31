@@ -1,0 +1,1 @@
+// Geospatial TypeScript types
