@@ -26,7 +26,6 @@ def prepare_ee_image(image_id: str, dataset: str, aoi, *, target_scale_m: Option
         "bands": list(CANONICAL_BANDS),
         "crs": image.select("blue").projection().crs(),
         "processing_status": "prepared",
-        "image": image,
         "nodata_policy": "Invalid reflectance remains masked; valid_pixel is an explicit QA flag, not an environmental value.",
     }
     return image, metadata

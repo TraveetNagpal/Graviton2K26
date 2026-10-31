@@ -45,6 +45,16 @@ To start work through the investigator, send `analysis: {analysis_type, paramete
 
 The chat transcript currently lives in the browser session, while analysis job references remain process-local as described above. The LLM generates interpretation prose, so prompts restrict it to provided evidence and avoid numeric claims; the system always returns the separately rendered backend measurements as the authoritative finding.
 
+### Module 7: historical analysis
+
+The explorer at `/explorer` searches the Earth Engine catalog using `/api/satellite/search` (inclusive start date, exclusive end date), region, dataset, and scene-cloud threshold. It displays one **actual** observation with the lowest catalog scene-cloud value in each chosen day/week/month/quarter bucket; empty buckets are explicitly listed as missing. Scene cloud is only a catalog indicator and is not AOI cloud coverage. Selecting an observation calls `/api/satellite/preview`, which returns a server-generated Earth Engine true-colour map tile reference and QA metadata without transferring raster pixels.
+
+To calculate a timeline, choose at least two selected actual observations and a baseline, then submit `POST /api/analysis/trend`. Each selected date is measured against that baseline using the existing Module 5 preprocessing and Earth Engine analysis functions. The request supports up to 30 dates; the response is a standard analysis job polled at `GET /api/analysis/{analysis_id}`. Completed points include measured NDVI, threshold-mapped water area, or NDBI built-up proxy area, valid coverage, warnings, paired analysis IDs, and layer URLs. Failed/insufficient observations have `status: unavailable` and `value: null`; they are not charted as zero. The interface exposes missing date buckets and does not interpolate missing measurement values. Sensor mixtures and observations from differing months receive comparability warnings.
+
+Exact duplicate analysis requests reuse an accepted, running, or completed job within the current backend process. Cache and jobs are process-local and are lost on restart; use the durable task queue/database before production or multi-worker deployment. Trend computation is a sequence of baseline comparisons, so large selections can take time; narrow date range or use a coarser observation frequency. Configure `FRONTEND_ORIGINS` on the backend for browser access and `NEXT_PUBLIC_API_BASE_URL` in the frontend (the latter is a public URL only and must never contain credentials).
+
+Run the web app from `frontend/` with `npm install` then `npm run dev`; copy `frontend/.env.example` to `.env.local` if the backend API is not at its localhost default.
+
 Sentinel-2 standardized six-band output defaults to 20 m to respect its native SWIR resolution; Landsat defaults to 30 m. Cross-sensor comparisons should use a common 30 m grid. Scene-level cloud metadata is not a substitute for AOI valid-pixel coverage, which is a clear-support proxy and not a guarantee of cloud-free pixels.
 
 Run tests from `backend/` using `pytest`. Earth Engine credentials are not required for the local array QA tests. A real catalog integration check requires an authorized Earth Engine project and credentials.

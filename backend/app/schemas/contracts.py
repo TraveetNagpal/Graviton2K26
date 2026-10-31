@@ -79,3 +79,35 @@ class WaterAnalysisRequest(ChangeAnalysisRequest):
 
 class UrbanAnalysisRequest(ChangeAnalysisRequest):
     built_up_threshold: float = Field(default=0.1, ge=-1, le=1)
+
+
+class TrendObservation(BaseModel):
+    date: date
+    image_id: str = Field(min_length=3)
+    dataset: Dataset
+
+
+class HistoricalTrendRequest(BaseModel):
+    analysis_type: Literal["vegetation", "water", "urban"]
+    observations: list[TrendObservation] = Field(min_length=2, max_length=30)
+    baseline_image_id: str
+    area_of_interest: dict[str, Any]
+    target_crs: str = "EPSG:6933"
+    target_scale_m: int = Field(default=30, gt=0, le=1000)
+    minimum_valid_coverage_percent: float = Field(default=20, ge=1, le=100)
+    denominator_epsilon: float = Field(default=0.000001, gt=0, le=0.1)
+    change_threshold: float = Field(default=0.1, gt=0, le=2)
+    water_threshold: float = Field(default=0.0, ge=-1, le=1)
+    built_up_threshold: float = Field(default=0.1, ge=-1, le=1)
+
+    @model_validator(mode="after")
+    def valid_observations(self):
+        ids = [item.image_id for item in self.observations]
+        if len(set(ids)) != len(ids):
+            raise ValueError("Observation image IDs must be unique")
+        dates = [item.date for item in self.observations]
+        if dates != sorted(dates) or len(set(dates)) != len(dates):
+            raise ValueError("Observations must have unique dates and be supplied in chronological order")
+        if self.baseline_image_id not in ids:
+            raise ValueError("baseline_image_id must be one of the selected observations")
+        return self
