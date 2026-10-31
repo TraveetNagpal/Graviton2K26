@@ -45,3 +45,8 @@ node_modules/
 .next/
 dist/
 build/
+
+secrets/
+data/
+
+

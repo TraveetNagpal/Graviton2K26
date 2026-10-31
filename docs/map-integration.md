@@ -21,7 +21,7 @@ src/
 │   │   ├── LayerPanel.tsx         Layer visibility + opacity
 │   │   ├── SelectionInfoPanel.tsx Coordinates, area, GeoJSON export
 │   │   └── LegendPanel.tsx        Colour legend for active layers
-│   └── dashboard/         ← Module 1 placeholder (replace in place)
+│   └── dashboard/         ← Dashboard overview and service health
 │
 ├── components/
 │   └── geo/
@@ -82,18 +82,22 @@ function AnalysisForm() {
   const runAnalysis = async () => {
     if (!selection) return;
 
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/analysis`, {
+    const token = localStorage.getItem('terramind_access_token');
+    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/satellite/search`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({
-        geometry: selection,        // GeoJSON Feature with CRS
-        analysisType: 'vegetation',
-        dateRange: { start: '2024-01-01', end: '2024-12-31' },
+        area_of_interest: selection.geometry, // GeoJSON Polygon, WGS84
+        dataset: 'sentinel-2',
+        start_date: '2025-01-01',
+        end_date: '2026-01-01', // exclusive
+        max_cloud_cover: 30,
       }),
     });
 
-    const result = await response.json();
-    // result.tileUrl → pass to updateLayerUrl() in the store
+    const { observations } = await response.json(); // actual Earth Engine catalog assets
+    // Select two returned image_id values in chronological order, then POST
+    // /api/analysis/vegetation with their IDs/datasets and area_of_interest.
   };
 }
 ```
@@ -167,33 +171,40 @@ store.updateLayerUrl('change-before-after', apiResponse.tileUrl);
 
 The Reports page is available at `/reports`. It expects the API base URL in
 `VITE_API_BASE_URL`; for example, `http://localhost:8000/api` maps to the
-following report endpoints:
+following report endpoints. Create an account or sign in through `/api/auth`
+before accessing private reports.
 
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
-| POST | `/api/reports/generate` | Validate a source analysis and queue/generate artifacts |
+| POST | `/api/reports/generate` | Validate a completed source analysis and generate artifacts |
 | GET | `/api/reports` | List the signed-in user's reports |
 | GET | `/api/reports/{report_id}` | Read a report and its metadata |
 | GET | `/api/reports/{report_id}/download?format=pdf\|csv\|geojson` | Secure artifact download |
 
+All report routes require a bearer token. Report list, detail, and download
+queries are filtered by the signed-in owner. Generation also verifies that the
+source analysis belongs to the same user.
+
 Generation request:
 
 ```json
-{ "analysis_id": "analysis-123", "title": "Optional title", "formats": ["pdf", "csv", "geojson"] }
+{ "analysis_id": "analysis-123", "title": "Optional title", "formats": ["pdf", "csv"] }
 ```
 
-The server must authorize the caller against the source analysis and report on
-every request. It must reject unknown or inaccessible analysis IDs; derive
+The server rejects unknown or inaccessible analysis IDs; derives
 region, observations, dataset, method, measurements, quality, interpretation,
 uncertainty, and processing time from the stored analysis result; and omit
 unavailable values instead of substituting zero. A completed response should
-include a report record and only the download URLs/artifacts supported by that
-analysis. Failed jobs should include a useful `error` and `status: "failed"`.
+include a report record and only artifact formats supported by that analysis.
+Downloads use the authenticated report download endpoint. Failed jobs should
+include a useful `error` and `status: "failed"`.
 
-The PDF is a server-generated report containing the actual source result,
-before/after imagery and change map when supplied, measurement units, chart/map
-legends, methodology, quality and limitation notes, observation dates, and
-page numbers. CSV contains only available tabular measurements. GeoJSON is
+The PDF is server-generated and contains source asset IDs, dates, analysis
+method, measurements, a vegetation change legend, AI interpretation when
+configured, methodology, quality and limitation notes, and page numbers. It
+embeds before/after true-colour thumbnails when Earth Engine can render them
+and records whether both were included; the raster layer endpoint remains the
+source for interactive maps. CSV contains only available tabular measurements. GeoJSON is
 exposed only for actual compatible vector output; raster tiles/images must
 never be converted or advertised as GeoJSON. Downloads should be protected by
 the same authorization as report metadata (or short-lived signed URLs).
@@ -213,21 +224,17 @@ Example completed record:
 }
 ```
 
-The browser client sends credentials with requests. Configure CORS and cookie
-security for the deployment origin; do not put bearer credentials or signed
-download tokens in report metadata intended for public display.
+The browser client sends bearer credentials with requests. Configure CORS for
+the deployment origin; do not put bearer credentials or signed download tokens
+in report metadata intended for public display.
 
-## Adding Module 1 (Dashboard)
-
-Module 1 is already wired into routing:
-
-1. Open `src/modules/dashboard/Dashboard.tsx`
-2. Replace its contents with your dashboard implementation
-3. No changes to `App.tsx`, `AppShell.tsx`, or any Explorer file are needed
-
-The nav link **Dashboard → /dashboard** already exists in `AppShell`.
-
----
+Saved regions and monitoring configurations are owner-scoped PostGIS records.
+Monitoring `schedule` uses a five-field UTC cron expression. When
+`MONITORING_SCHEDULER_ENABLED=true`, the single backend process reruns the
+validated parameters on that schedule; `/api/regions/monitoring/{id}/run`
+provides an authenticated manual trigger. The current schedule reuses its
+configured observation IDs, so update the configuration with newer observations
+when you intend to monitor later acquisitions.
 
 ## Map Credentials
 

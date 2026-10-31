@@ -1,5 +1,5 @@
 """Conversational orchestration over the existing measured analysis jobs."""
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Depends
 from fastapi.responses import JSONResponse
 from shapely.geometry import shape
 from shapely.validation import explain_validity
@@ -7,6 +7,8 @@ from shapely.validation import explain_validity
 from app.schemas.ai import ANALYSIS_MODELS, InvestigationRequest
 from app.services.ai.investigator import asks_for_cause, evidence_for, explain, is_supported_question, measured_finding
 from app.services.analysis.jobs import get_job, run_job, submit
+from app.core.security import get_current_user
+from app.models.schema import User
 
 router = APIRouter(prefix="/ai", tags=["AI Earth Investigator"])
 
@@ -25,7 +27,7 @@ def _validate_region(geojson):
 
 
 @router.post("/investigate")
-async def investigate(payload: InvestigationRequest, background_tasks: BackgroundTasks):
+async def investigate(payload: InvestigationRequest, background_tasks: BackgroundTasks, user: User = Depends(get_current_user)):
     """Explain a completed numerical analysis, or initiate a validated supported analysis."""
     question = payload.question.strip()
     if not is_supported_question(question):
@@ -42,7 +44,7 @@ async def investigate(payload: InvestigationRequest, background_tasks: Backgroun
             _validate_region(params.area_of_interest)
         except Exception as exc:
             raise HTTPException(status_code=422, detail={"error": "invalid_analysis_request", "detail": str(exc)}) from exc
-        analysis_id = submit(payload.analysis.analysis_type, params.model_dump(mode="json"))
+        analysis_id = submit(payload.analysis.analysis_type, params.model_dump(mode="json"), owner_id=user.id)
         background_tasks.add_task(run_job, analysis_id)
         return JSONResponse(status_code=202, content={
             "status": "analysis_started", "analysis_id": analysis_id,
@@ -55,7 +57,9 @@ async def investigate(payload: InvestigationRequest, background_tasks: Backgroun
         return {"status": "analysis_required", "question": question, "answer": "Select a completed analysis, or provide an analysis type and validated Module 5 parameters to start one."}
     job = get_job(payload.analysis_id)
     if not job:
-        raise HTTPException(status_code=404, detail="Analysis not found. Analysis jobs are currently process-local and may not survive a restart.")
+        raise HTTPException(status_code=404, detail="Analysis not found")
+    if job.get("owner_id") != user.id:
+        raise HTTPException(status_code=404, detail="Analysis not found")
     if job["status"] in ("accepted", "running"):
         return JSONResponse(status_code=202, content={"status": job["status"], "analysis_id": payload.analysis_id, "progress_url": f"/api/analysis/{payload.analysis_id}", "message": "Waiting for numerical geospatial analysis to complete."})
     if job["status"] != "completed":

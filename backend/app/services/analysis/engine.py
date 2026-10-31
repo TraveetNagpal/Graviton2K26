@@ -11,6 +11,7 @@ import ee
 from app.services.earth_engine.client import earth_engine_client
 from app.services.earth_engine.errors import EarthEngineError
 from app.services.earth_engine.processing import prepare_ee_comparison
+from app.services.earth_engine.settings import get_ee_settings
 
 
 PALETTES = {
@@ -64,6 +65,10 @@ class ChangeDetectionEngine:
     def _analyze(self, kind: str, request: dict[str, Any]) -> dict[str, Any]:
         earth_engine_client.initialize()
         region = ee.Geometry(request["area_of_interest"])
+        aoi_area_sq_km = region.area(maxError=1000).divide(1_000_000).getInfo()
+        max_aoi_area = get_ee_settings().max_aoi_area_sq_km
+        if aoi_area_sq_km > max_aoi_area:
+            raise ValueError(f"AOI area {aoi_area_sq_km:.1f} km² exceeds configured limit of {max_aoi_area:.1f} km²")
         scale = request["target_scale_m"]
         crs = request["target_crs"]
         comparison = prepare_ee_comparison(
@@ -175,6 +180,11 @@ class ChangeDetectionEngine:
             warnings.append("NDBI thresholding is a coarse built-up land-surface proxy, not a validated land-cover classification or individual-building detector; bright soil, bare ground and dry surfaces can be false positives.")
         else:
             raise ValueError(f"Unsupported analysis type: {kind}")
+
+        # Save compact true-colour composites for authorized map display and
+        # report thumbnails. Pixel data stays in Earth Engine until requested.
+        layer_images["earlier_rgb"] = earlier.select(["red", "green", "blue"])
+        layer_images["later_rgb"] = later.select(["red", "green", "blue"])
 
         effective_valid = change.mask().reduce(ee.Reducer.min()).unmask(0).rename("valid_pixel")
         index_coverage = valid_pixel_metrics(effective_valid, region, scale_m=scale, crs=crs)["valid_pixel_coverage_percent"]

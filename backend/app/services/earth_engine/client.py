@@ -42,7 +42,7 @@ class EarthEngineClient:
                 ee.Initialize(project=self.settings.project)
             self._initialized = True
         except Exception as exc:
-            logger.exception("Earth Engine initialization failed")
+            logger.error("Earth Engine initialization failed; check server credentials and project access")
             raise EarthEngineAuthenticationError("Earth Engine initialization failed; verify server credentials and project access") from exc
 
     def status(self):
