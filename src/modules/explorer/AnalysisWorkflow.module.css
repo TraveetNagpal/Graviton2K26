@@ -1,0 +1,30 @@
+.panel {
+  position: absolute;
+  top: 64px;
+  left: 120px;
+  width: min(330px, calc(100% - 136px));
+  max-height: calc(100% - 90px);
+  overflow: auto;
+  pointer-events: auto;
+  z-index: 20;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 3px;
+  background: rgba(5, 6, 7, 0.94);
+  color: #f3f3ef;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+  font-size: 12px;
+  backdrop-filter: blur(14px);
+}
+
+@media (max-width: 720px) {
+  .panel {
+    top: auto;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    width: auto;
+    max-height: 60%;
+    z-index: 30;
+  }
+}

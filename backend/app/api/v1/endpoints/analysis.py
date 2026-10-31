@@ -52,7 +52,10 @@ def _submit(kind, payload, background_tasks, user):
     if run_analysis_inline():
         run_job(analysis_id)
         job = get_job(analysis_id)
-        return JSONResponse(status_code=analysis_status_code(job), content=public_job(job))
+        content = public_job(job)
+        content.setdefault("status_url", f"/api/analysis/{analysis_id}")
+        content.setdefault("layers_url", f"/api/analysis/{analysis_id}/layers")
+        return JSONResponse(status_code=analysis_status_code(job), content=content)
     background_tasks.add_task(run_job, analysis_id)
     job = get_job(analysis_id)
 
@@ -102,7 +105,9 @@ def analyze_trend(payload: HistoricalTrendRequest, background_tasks: BackgroundT
     if run_analysis_inline():
         run_trend_job(analysis_id)
         job = get_job(analysis_id)
-        return JSONResponse(status_code=analysis_status_code(job), content=public_job(job))
+        content = public_job(job)
+        content.setdefault("status_url", f"/api/analysis/{analysis_id}")
+        return JSONResponse(status_code=analysis_status_code(job), content=content)
     job = get_job(analysis_id)
     if job["status"] == "accepted":
         background_tasks.add_task(run_trend_job, analysis_id)

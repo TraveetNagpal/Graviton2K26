@@ -241,6 +241,7 @@ when you intend to monitor later acquisitions.
 | Service | Required | How to configure |
 |---------|----------|-----------------|
 | OpenStreetMap tiles | No | Used by default, no key needed |
+| Google Maps (satellite/roadmap 2D tiles) | Optional | Set `VITE_GOOGLE_MAPS_API_KEY` (restrict by HTTP referrer) and optionally `VITE_GOOGLE_MAPS_MAP_TYPE` |
 | Cesium Ion (terrain / 3D tiles) | Optional | Set `VITE_CESIUM_ION_TOKEN` in `.env` |
 | Stadia Maps (alternative OSM style) | Optional | Replace `OSM_STYLE` in `MapView.tsx` |
 
