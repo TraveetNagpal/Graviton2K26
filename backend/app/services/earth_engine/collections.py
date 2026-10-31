@@ -1,6 +1,7 @@
 """Earth Engine collection definitions and preprocessing rules."""
+from __future__ import annotations
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 
 @dataclass(frozen=True)
@@ -8,7 +9,7 @@ class DatasetConfig:
     key: str
     description: str
     collection_ids: tuple[str, ...]
-    cloud_property: str | None
+    cloud_property: Optional[str]
     resolution_m: int
     source_bands: tuple[str, ...]
     preprocess: Callable[[Any], Any]

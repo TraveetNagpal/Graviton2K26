@@ -1,9 +1,11 @@
 """Lazy Earth Engine preprocessing and Module 5 layer preparation."""
+from __future__ import annotations
 import ee
+from typing import Optional
 from .collections import CANONICAL_BANDS, DATASETS
 
 
-def prepare_ee_image(image_id: str, dataset: str, aoi, *, target_scale_m: int | None = None, target_crs: str | None = None):
+def prepare_ee_image(image_id: str, dataset: str, aoi, *, target_scale_m: Optional[int] = None, target_crs: Optional[str] = None):
     config = DATASETS[dataset]
     source = ee.Image(image_id)
     reflectance = config.preprocess(source).select(list(config.source_bands), list(CANONICAL_BANDS))
@@ -30,7 +32,7 @@ def prepare_ee_image(image_id: str, dataset: str, aoi, *, target_scale_m: int | 
     return image, metadata
 
 
-def valid_pixel_metrics(image, aoi, *, scale_m: int, crs: str | None = None):
+def valid_pixel_metrics(image, aoi, *, scale_m: int, crs: Optional[str] = None):
     image = ee.Image(image)
     valid = image.select("valid_pixel").eq(1)
     projection = image.select("valid_pixel").projection()

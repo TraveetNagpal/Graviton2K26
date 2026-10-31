@@ -1,5 +1,7 @@
 """Google Earth Engine authentication, catalog search, and processing facade."""
+from __future__ import annotations
 import logging
+from typing import Optional
 
 import ee
 
@@ -12,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class EarthEngineClient:
-    def __init__(self, settings: EarthEngineSettings | None = None):
+    def __init__(self, settings: Optional[EarthEngineSettings] = None):
         self.settings = settings or get_ee_settings()
         self._initialized = False
 

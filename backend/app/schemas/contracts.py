@@ -1,6 +1,7 @@
 """Request/response contracts for satellite search and preparation."""
+from __future__ import annotations
 from datetime import date
-from typing import Any, Literal
+from typing import Any, Literal, Optional
 from pydantic import BaseModel, Field, model_validator
 
 
@@ -27,8 +28,8 @@ class Observation(BaseModel):
     dataset_id: str
     image_id: str
     image_reference: str
-    cloud_cover: float | None
-    cloud_cover_property: str | None
+    cloud_cover: Optional[float]
+    cloud_cover_property: Optional[str]
     quality: dict[str, Any]
 
 
@@ -41,8 +42,8 @@ class PrepareObservationRequest(BaseModel):
     image_id: str
     dataset: Dataset
     area_of_interest: dict[str, Any]
-    target_scale_m: int | None = Field(default=None, gt=0)
-    target_crs: str | None = None
+    target_scale_m: Optional[int] = Field(default=None, gt=0)
+    target_crs: Optional[str] = None
 
 
 class PrepareComparisonRequest(BaseModel):
@@ -54,3 +55,27 @@ class PrepareComparisonRequest(BaseModel):
     target_crs: str
     target_scale_m: int = Field(default=30, gt=0)
     minimum_joint_coverage_percent: float = Field(default=20, ge=0, le=100)
+
+
+class ChangeAnalysisRequest(BaseModel):
+    earlier_image_id: str = Field(min_length=3)
+    earlier_dataset: Dataset
+    later_image_id: str = Field(min_length=3)
+    later_dataset: Dataset
+    area_of_interest: dict[str, Any] = Field(description="WGS84 GeoJSON Polygon or MultiPolygon")
+    target_crs: str = "EPSG:6933"
+    target_scale_m: int = Field(default=30, gt=0, le=1000)
+    minimum_valid_coverage_percent: float = Field(default=20, ge=1, le=100)
+    denominator_epsilon: float = Field(default=0.000001, gt=0, le=0.1)
+
+
+class VegetationAnalysisRequest(ChangeAnalysisRequest):
+    change_threshold: float = Field(default=0.1, gt=0, le=2)
+
+
+class WaterAnalysisRequest(ChangeAnalysisRequest):
+    water_threshold: float = Field(default=0.0, ge=-1, le=1)
+
+
+class UrbanAnalysisRequest(ChangeAnalysisRequest):
+    built_up_threshold: float = Field(default=0.1, ge=-1, le=1)

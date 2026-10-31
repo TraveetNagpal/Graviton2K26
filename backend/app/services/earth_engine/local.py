@@ -3,8 +3,9 @@
 Masked pixels stay masked throughout; this module never substitutes zero for nodata.
 Arrays are in band-first order (bands, rows, columns).
 """
+from __future__ import annotations
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Optional, Union
 
 import numpy as np
 
@@ -20,7 +21,7 @@ class PreparedRaster:
     metadata: dict[str, Any]
 
 
-def _qa_mask(dataset: str, qa: np.ndarray | None, shape: tuple[int, int]) -> np.ndarray:
+def _qa_mask(dataset: str, qa: Optional[np.ndarray], shape: tuple[int, int]) -> np.ndarray:
     if qa is None:
         return np.ones(shape, dtype=bool)
     qa = np.asarray(qa)
@@ -42,13 +43,13 @@ def prepare_local_raster(
     data: np.ndarray,
     band_names: list[str],
     *,
-    qa: np.ndarray | None = None,
-    nodata: float | int | None = None,
-    cloud_cover: float | None = None,
-    observation_date: str | None = None,
-    dataset_id: str | None = None,
-    resolution_m: float | None = None,
-    crs: str | None = None,
+    qa: Optional[np.ndarray] = None,
+    nodata: Optional[Union[float, int]] = None,
+    cloud_cover: Optional[float] = None,
+    observation_date: Optional[str] = None,
+    dataset_id: Optional[str] = None,
+    resolution_m: Optional[float] = None,
+    crs: Optional[str] = None,
     transform: Any = None,
 ) -> PreparedRaster:
     """Scale SR, apply dataset QA, and report valid coverage without filling nodata.
