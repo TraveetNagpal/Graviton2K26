@@ -1,5 +1,4 @@
-
-Hi, this project is for the Graviton Hackathon 2026 at CGC University. We selected the "Space" theme for this hackathon.
+This project was created for the Graviton Hackathon 2026 at CGC University, where we chose the "Space" theme.
 
 # TerraMind AI — Graviton 2K26
 
