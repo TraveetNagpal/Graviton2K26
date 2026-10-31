@@ -1,0 +1,1 @@
+// AI investigator drawer component
