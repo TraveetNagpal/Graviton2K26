@@ -1,0 +1,50 @@
+.container {
+  position: relative;
+  width: 100%;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+}
+
+.viewport {
+  position: absolute;
+  inset: 0;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.viewToggle {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  gap: 2px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 2px;
+  pointer-events: all;
+}
+
+.viewBtn {
+  padding: 3px 10px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.viewBtn.active {
+  background: rgba(34, 211, 238, 0.15);
+  color: var(--color-primary);
+}
