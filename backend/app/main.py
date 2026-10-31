@@ -1,9 +1,8 @@
-import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from collections import defaultdict, deque
 from threading import Lock
@@ -13,19 +12,16 @@ from time import monotonic
 from app.api.v1.endpoints.satellite import router as satellite_router
 from app.api.v1.endpoints.analysis import router as analysis_router
 from app.api.v1.endpoints.ai import router as ai_router
-
 from app.api.v1.endpoints.reports import router as reports_router
 from app.api.v1.endpoints.auth import router as auth_router
 from app.api.v1.endpoints.regions import router as regions_router
+from app.api.v1.endpoints.monitoring import router as monitoring_router
 from app.core.config import get_settings
 from app.core.database import get_engine
-
-from app.api.v1.endpoints.monitoring import router as monitoring_router
 from app.services.monitoring.scheduler import start_scheduler, stop_scheduler
-
 from app.services.earth_engine.errors import EarthEngineError
 from sqlalchemy.exc import SQLAlchemyError
-from app.services.monitoring_scheduler import start_scheduler, stop_scheduler
+
 
 @asynccontextmanager
 async def lifespan(_app):
@@ -39,12 +35,17 @@ async def lifespan(_app):
         stop_scheduler()
 
 
+settings = get_settings()
+
 app = FastAPI(title="TerraMind AI API", lifespan=lifespan)
+
+_origins = [origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[origin.strip() for origin in os.getenv("FRONTEND_ORIGINS", "http://localhost:3000").split(",") if origin.strip()],
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization"],
+    allow_origins=_origins or ["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 app.include_router(satellite_router, prefix="/api")
 app.include_router(analysis_router, prefix="/api")
@@ -55,7 +56,6 @@ app.include_router(auth_router, prefix="/api")
 app.include_router(regions_router, prefix="/api")
 
 settings = get_settings()
-app.add_middleware(CORSMiddleware, allow_origins=[origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()], allow_credentials=True, allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"], allow_headers=["Authorization", "Content-Type"])
 _rate_buckets: dict[tuple[str, str], deque[float]] = defaultdict(deque)
 _rate_lock = Lock()
 

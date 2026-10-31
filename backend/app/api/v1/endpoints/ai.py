@@ -3,7 +3,9 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Depends
 from fastapi.responses import JSONResponse
 from shapely.geometry import shape
 from shapely.validation import explain_validity
+from starlette.concurrency import run_in_threadpool
 
+from app.core.config import run_analysis_inline
 from app.schemas.ai import ANALYSIS_MODELS, InvestigationRequest
 from app.services.ai.investigator import asks_for_cause, evidence_for, explain, is_supported_question, measured_finding
 from app.services.analysis.jobs import get_job, run_job, submit
@@ -33,7 +35,8 @@ async def investigate(payload: InvestigationRequest, background_tasks: Backgroun
     if not is_supported_question(question):
         return {"status": "unsupported_question", "question": question, "answer": "I can answer questions about completed vegetation, water, or built-up proxy analyses. Please select a completed analysis or provide a supported analysis request.", "analysis_id": payload.analysis_id}
 
-    if payload.analysis and not payload.analysis_id:
+    analysis_id = payload.analysis_id
+    if payload.analysis and not analysis_id:
         if payload.region:
             _validate_region(payload.region)
         model = ANALYSIS_MODELS[payload.analysis.analysis_type]
@@ -45,25 +48,31 @@ async def investigate(payload: InvestigationRequest, background_tasks: Backgroun
         except Exception as exc:
             raise HTTPException(status_code=422, detail={"error": "invalid_analysis_request", "detail": str(exc)}) from exc
         analysis_id = submit(payload.analysis.analysis_type, params.model_dump(mode="json"), owner_id=user.id)
-        background_tasks.add_task(run_job, analysis_id)
-        return JSONResponse(status_code=202, content={
-            "status": "analysis_started", "analysis_id": analysis_id,
-            "progress_url": f"/api/analysis/{analysis_id}",
-            "layers_url": f"/api/analysis/{analysis_id}/layers",
-            "message": "The supported geospatial analysis is running. Submit this question again with analysis_id when it completes.",
-        })
+        if not run_analysis_inline():
+            background_tasks.add_task(run_job, analysis_id)
+            return JSONResponse(status_code=202, content={
+                "status": "analysis_started", "analysis_id": analysis_id,
+                "progress_url": f"/api/analysis/{analysis_id}",
+                "layers_url": f"/api/analysis/{analysis_id}/layers",
+                "message": "The supported geospatial analysis is running. Submit this question again with analysis_id when it completes.",
+            })
+        await run_in_threadpool(run_job, analysis_id)
 
-    if not payload.analysis_id:
+    if not analysis_id:
         return {"status": "analysis_required", "question": question, "answer": "Select a completed analysis, or provide an analysis type and validated Module 5 parameters to start one."}
-    job = get_job(payload.analysis_id)
+    job = get_job(analysis_id)
     if not job:
         raise HTTPException(status_code=404, detail="Analysis not found")
     if job.get("owner_id") != user.id:
         raise HTTPException(status_code=404, detail="Analysis not found")
     if job["status"] in ("accepted", "running"):
-        return JSONResponse(status_code=202, content={"status": job["status"], "analysis_id": payload.analysis_id, "progress_url": f"/api/analysis/{payload.analysis_id}", "message": "Waiting for numerical geospatial analysis to complete."})
+        return JSONResponse(status_code=202, content={"status": job["status"], "analysis_id": analysis_id, "progress_url": f"/api/analysis/{analysis_id}", "message": "Waiting for numerical geospatial analysis to complete."})
     if job["status"] != "completed":
-        return {"status": "analysis_failed", "analysis_id": payload.analysis_id, "error": job.get("error"), "answer": "No completed measurements are available for this analysis."}
+        detail = (job.get("error") or {}).get("detail")
+        answer = "No completed measurements are available for this analysis."
+        if detail:
+            answer = f"{answer} {detail}"
+        return {"status": "analysis_failed", "analysis_id": analysis_id, "error": job.get("error"), "answer": answer}
 
     result = job["result"]
     evidence = evidence_for(job)

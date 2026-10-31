@@ -16,24 +16,25 @@ class FakeLayer:
         return {"mapid": "test-map-id", "tile_fetcher": SimpleNamespace(url_format="https://tiles.example/{z}/{x}/{y}")}
 
 
-def test_vegetation_job_returns_numeric_result_and_layer_reference():
-    def fake_analyze(kind, request):
-        return {
-            "analysis_id": request["analysis_id"],
-            "analysis_type": kind,
-            "status": "completed",
-            "change_layer": {"name": "change", "layers_endpoint": f"/api/analysis/{request['analysis_id']}/layers"},
-            "region": request["area_of_interest"],
-            "observation_dates": {"earlier": "2024-01-01", "later": "2024-02-01"},
-            "datasets": {},
-            "analysis_method": "NDVI difference",
-            "measurements": {"mean_ndvi_difference": -0.2, "mapped_decrease_area_ha": 12},
-            "quality_warnings": [],
-            "uncertainty": {"threshold_sensitivity_evaluated": False},
-            "created_at": "2024-02-02T00:00:00Z",
-            "_layer_images": {"change": FakeLayer()},
-        }
+def fake_analyze(kind, request):
+    return {
+        "analysis_id": request["analysis_id"],
+        "analysis_type": kind,
+        "status": "completed",
+        "change_layer": {"name": "change", "layers_endpoint": f"/api/analysis/{request['analysis_id']}/layers"},
+        "region": request["area_of_interest"],
+        "observation_dates": {"earlier": "2024-01-01", "later": "2024-02-01"},
+        "datasets": {},
+        "analysis_method": "NDVI difference",
+        "measurements": {"mean_ndvi_difference": -0.2, "mapped_decrease_area_ha": 12},
+        "quality_warnings": [],
+        "uncertainty": {"threshold_sensitivity_evaluated": False},
+        "created_at": "2024-02-02T00:00:00Z",
+        "_layer_images": {"change": FakeLayer()},
+    }
 
+
+def test_vegetation_job_returns_numeric_result_and_layer_reference():
     body = {
         "earlier_image_id": "COPERNICUS/S2_SR_HARMONIZED/first",
         "earlier_dataset": "sentinel-2",
@@ -64,6 +65,22 @@ def test_analysis_rejects_invalid_aoi():
         "area_of_interest": {"type": "Point", "coordinates": [77, 12]},
     })
     assert response.status_code == 422
+
+
+def test_inline_analysis_completes_within_the_request():
+    body = {
+        "earlier_image_id": "COPERNICUS/S2_SR_HARMONIZED/first",
+        "earlier_dataset": "sentinel-2",
+        "later_image_id": "COPERNICUS/S2_SR_HARMONIZED/second",
+        "later_dataset": "sentinel-2",
+        "area_of_interest": AOI,
+    }
+    with patch("app.api.v1.endpoints.analysis.run_analysis_inline", return_value=True), \
+            patch("app.services.analysis.jobs.change_detection_engine.analyze", side_effect=fake_analyze):
+        response = client.post("/api/analysis/vegetation", json=body)
+    assert response.status_code == 200
+    assert response.json()["status"] == "completed"
+    assert response.json()["measurements"]["mean_ndvi_difference"] == -0.2
 
 
 def test_missing_analysis_id_returns_404():
