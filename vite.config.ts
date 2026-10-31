@@ -21,12 +21,21 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['cesium'],
   },
+  server: {
+    proxy: {
+      '/api': 'http://localhost:8000',
+      '/docs': 'http://localhost:8000',
+      '/openapi.json': 'http://localhost:8000',
+      '/redoc': 'http://localhost:8000',
+      '/health': 'http://localhost:8000',
+      '/ready': 'http://localhost:8000',
+    },
+  },
   build: {
     chunkSizeWarningLimit: 10000,
     rollupOptions: {
       output: {
         manualChunks: {
-          cesium: ['cesium'],
           maplibre: ['maplibre-gl'],
           turf: ['@turf/turf'],
         },

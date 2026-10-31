@@ -2,7 +2,6 @@
  * MapControls – right-side panel: 2D/3D toggle, zoom, layers, fullscreen.
  */
 
-import React from 'react';
 import { useExplorerStore } from '@/store';
 import styles from './MapControls.module.css';
 

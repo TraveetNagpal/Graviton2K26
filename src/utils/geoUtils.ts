@@ -4,6 +4,7 @@
  */
 
 import * as turf from '@turf/turf';
+import type { Feature, Polygon } from 'geojson';
 import type {
   LngLat,
   GeoJSONSelection,
@@ -69,7 +70,7 @@ export function buildRectangleSelection(
     coordinates: [ring],
   };
 
-  const feature = turf.feature(geometry);
+  const feature: Feature<Polygon> = { type: 'Feature', geometry, properties: {} };
   const areaSqKm = turf.area(feature) / 1_000_000;
 
   return {
@@ -104,9 +105,9 @@ export function buildPolygonSelection(vertices: LngLat[]): GeoJSONSelection | nu
   };
 
   try {
-    const feature = turf.feature(geometry);
+    const feature: Feature<Polygon> = { type: 'Feature', geometry, properties: {} };
     // Validate: must not be self-intersecting (kinks check)
-    const kinks = turf.kinks(feature as turf.Feature<turf.Polygon>);
+    const kinks = turf.kinks(feature);
     if (kinks.features.length > 0) return null;
 
     const areaSqKm = turf.area(feature) / 1_000_000;

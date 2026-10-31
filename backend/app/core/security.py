@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import json
 import time
+from typing import Optional
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
@@ -42,7 +43,7 @@ def create_token(user_id: int) -> str:
     signature = _b64(hmac.new(settings.auth_secret.encode(), body.encode(), hashlib.sha256).digest())
     return f"{body}.{signature}"
 
-def get_current_user(credentials: HTTPAuthorizationCredentials | None = Depends(bearer), db: Session = Depends(get_db)) -> User:
+def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer), db: Session = Depends(get_db)) -> User:
     settings = get_settings()
     if not settings.auth_secret:
         raise HTTPException(status_code=503, detail="Authentication is not configured")

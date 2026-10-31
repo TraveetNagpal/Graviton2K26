@@ -1,4 +1,4 @@
-import React, { Suspense, lazy } from 'react';
+import { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import AppShell from './components/layout/AppShell';
 import LoadingSpinner from './components/ui/LoadingSpinner';

@@ -29,7 +29,10 @@ from app.services.monitoring_scheduler import start_scheduler, stop_scheduler
 
 @asynccontextmanager
 async def lifespan(_app):
-    start_scheduler()
+    # Vercel functions are request-driven and may be frozen or recycled at any time.
+    # Run scheduled work in a dedicated persistent worker instead.
+    if os.getenv("VERCEL") != "1":
+        start_scheduler()
     try:
         yield
     finally:

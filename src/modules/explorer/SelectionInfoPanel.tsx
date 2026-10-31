@@ -2,7 +2,7 @@
  * SelectionInfoPanel – bottom panel showing coordinates, area, and GeoJSON export.
  */
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useExplorerStore } from '@/store';
 import { formatArea, formatCoordinates } from '@/utils/geoUtils';
 import type { LngLat } from '@/types';

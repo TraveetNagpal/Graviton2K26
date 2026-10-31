@@ -2,6 +2,7 @@
 from io import BytesIO
 from html import escape
 from pathlib import Path
+from typing import Optional
 import reportlab
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
@@ -12,7 +13,7 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from shapely.geometry import shape
 
 
-def build_analysis_pdf(title: str, result: dict, report_id: str, thumbnails: dict[str, bytes] | None = None) -> bytes:
+def build_analysis_pdf(title: str, result: dict, report_id: str, thumbnails: Optional[dict[str, bytes]] = None) -> bytes:
     stream = BytesIO()
     styles = getSampleStyleSheet()
     font_path = Path(reportlab.__file__).parent / "fonts" / "Vera.ttf"

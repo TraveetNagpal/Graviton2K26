@@ -15,7 +15,7 @@
  * ```
  */
 
-import React, { useEffect, useCallback } from 'react';
+import { useEffect } from 'react';
 import { useExplorerStore } from '@/store';
 import type { GeoJSONSelection, SelectionMode } from '@/types';
 import ToolBar from '@/modules/explorer/ToolBar';

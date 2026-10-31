@@ -12,7 +12,7 @@
  *  - Rendering active selection as a Cesium entity
  */
 
-import React, { useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
 import {
   Viewer,
   Entity,
@@ -139,7 +139,7 @@ export default function GlobeView() {
 
   // Double-click closes polygon
   const handleMapDblClick = useCallback(
-    (position: { x: number; y: number }) => {
+    (_position: { x: number; y: number }) => {
       if (selectionMode !== 'polygon') return;
       const viewer = viewerRef.current?.cesiumElement;
       if (!viewer) return;
@@ -241,18 +241,17 @@ export default function GlobeView() {
       geocoder={false}
       infoBox={false}
       selectionIndicator={false}
-      // OSM basemap – no token needed
-      imageryProvider={
-        new OpenStreetMapImageryProvider({
-          url: 'https://tile.openstreetmap.org/',
-          credit: '© OpenStreetMap contributors',
-        })
-      }
+      baseLayer={false}
       // Flat ellipsoid terrain – replace with a terrain provider if desired
       terrainProvider={new EllipsoidTerrainProvider()}
       style={{ width: '100%', height: '100%' }}
-      onReady={() => registerHandlers()}
     >
+      <ImageryLayer
+        imageryProvider={new OpenStreetMapImageryProvider({
+          url: 'https://tile.openstreetmap.org/',
+          credit: '© OpenStreetMap contributors',
+        })}
+      />
       {/* Satellite / analysis overlay layers */}
       {visibleRasterLayers.map((layer) => (
         <ImageryLayer

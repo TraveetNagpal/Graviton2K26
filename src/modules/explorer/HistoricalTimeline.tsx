@@ -6,7 +6,7 @@ type Frequency = 'daily' | 'weekly' | 'monthly' | 'quarterly';
 type Observation = { date: string; dataset: string; image_id: string; cloud_cover?: number | null };
 type Point = { date: string; image_id: string; dataset: string; status: string; value?: { value: number | null; unit: string }; valid_pixel_coverage_percent?: number; layer_url?: string; layer_name?: string; warning?: string };
 type Trend = { analysis_id: string; status: string; baseline: { date: string }; points: Point[]; quality_warnings: string[]; measurement_definition: string; missing_observation_count: number };
-const API_BASE = String((import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:8000/api').replace(/\/v1\/?$/, '');
+const API_BASE = String((import.meta as any).env?.VITE_API_BASE_URL || '/api').replace(/\/v1\/?$/, '');
 
 function bucket(date: string, frequency: Frequency) {
   if (frequency === 'daily') return date;
