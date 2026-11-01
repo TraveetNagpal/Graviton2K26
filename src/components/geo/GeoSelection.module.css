@@ -45,6 +45,6 @@
 }
 
 .viewBtn.active {
-  background: rgba(34, 211, 238, 0.15);
+  background: rgba(111, 168, 255, 0.18);
   color: var(--color-primary);
 }

@@ -82,10 +82,9 @@ function AnalysisForm() {
   const runAnalysis = async () => {
     if (!selection) return;
 
-    const token = localStorage.getItem('terramind_access_token');
     const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/satellite/search`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         area_of_interest: selection.geometry, // GeoJSON Polygon, WGS84
         dataset: 'sentinel-2',
@@ -149,7 +148,7 @@ updateLayerUrl('vegetation-ndvi', 'https://tiles.terramind.ai/ndvi/{z}/{x}/{y}.p
 toggleLayerVisibility('vegetation-ndvi'); // make it visible
 ```
 
-The 2D (MapLibre) and 3D (CesiumJS) views both consume layer URLs from the store and render them automatically.
+The 2D (MapLibre) and 3D (CesiumJS) views both consume layer URLs from the store and render them automatically. Earth Engine tile tokens are short-lived and tied to the serving process; the layers endpoint rebuilds them from the persisted analysis request when they are missing.
 
 ---
 
@@ -171,19 +170,18 @@ store.updateLayerUrl('change-before-after', apiResponse.tileUrl);
 
 The Reports page is available at `/reports`. It expects the API base URL in
 `VITE_API_BASE_URL`; for example, `http://localhost:8000/api` maps to the
-following report endpoints. Create an account or sign in through `/api/auth`
-before accessing private reports.
+following report endpoints. Authentication is disabled; reports belong to a
+single shared workspace.
 
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
 | POST | `/api/reports/generate` | Validate a completed source analysis and generate artifacts |
-| GET | `/api/reports` | List the signed-in user's reports |
+| GET | `/api/reports` | List workspace reports |
 | GET | `/api/reports/{report_id}` | Read a report and its metadata |
 | GET | `/api/reports/{report_id}/download?format=pdf\|csv\|geojson` | Secure artifact download |
 
-All report routes require a bearer token. Report list, detail, and download
-queries are filtered by the signed-in owner. Generation also verifies that the
-source analysis belongs to the same user.
+Report list, detail, and download queries are scoped to the shared workspace.
+Generation also verifies that the source analysis belongs to that workspace.
 
 Generation request:
 
@@ -196,7 +194,7 @@ region, observations, dataset, method, measurements, quality, interpretation,
 uncertainty, and processing time from the stored analysis result; and omit
 unavailable values instead of substituting zero. A completed response should
 include a report record and only artifact formats supported by that analysis.
-Downloads use the authenticated report download endpoint. Failed jobs should
+Downloads use the report download endpoint. Failed jobs should
 include a useful `error` and `status: "failed"`.
 
 The PDF is server-generated and contains source asset IDs, dates, analysis
@@ -206,8 +204,9 @@ embeds before/after true-colour thumbnails when Earth Engine can render them
 and records whether both were included; the raster layer endpoint remains the
 source for interactive maps. CSV contains only available tabular measurements. GeoJSON is
 exposed only for actual compatible vector output; raster tiles/images must
-never be converted or advertised as GeoJSON. Downloads should be protected by
-the same authorization as report metadata (or short-lived signed URLs).
+never be converted or advertised as GeoJSON. Downloads are served by the same
+report download endpoint; artifact bytes are stored with the report record, so
+downloads remain valid after a restart.
 
 Example completed record:
 
@@ -224,15 +223,16 @@ Example completed record:
 }
 ```
 
-The browser client sends bearer credentials with requests. Configure CORS for
-the deployment origin; do not put bearer credentials or signed download tokens
-in report metadata intended for public display.
+The browser client sends no credentials. Configure CORS for the deployment
+origin. Because all visitors share one workspace, deploy this configuration
+only in a trusted environment or add authentication before exposing it
+publicly.
 
-Saved regions and monitoring configurations are owner-scoped PostGIS records.
+Saved regions and monitoring configurations are workspace-scoped PostGIS records.
 Monitoring `schedule` uses a five-field UTC cron expression. When
 `MONITORING_SCHEDULER_ENABLED=true`, the single backend process reruns the
 validated parameters on that schedule; `/api/regions/monitoring/{id}/run`
-provides an authenticated manual trigger. The current schedule reuses its
+provides a manual trigger. The current schedule reuses its
 configured observation IDs, so update the configuration with newer observations
 when you intend to monitor later acquisitions.
 
@@ -241,6 +241,7 @@ when you intend to monitor later acquisitions.
 | Service | Required | How to configure |
 |---------|----------|-----------------|
 | OpenStreetMap tiles | No | Used by default, no key needed |
+| Google Maps (satellite/roadmap 2D tiles) | Optional | Set `VITE_GOOGLE_MAPS_API_KEY` (restrict by HTTP referrer) and optionally `VITE_GOOGLE_MAPS_MAP_TYPE` |
 | Cesium Ion (terrain / 3D tiles) | Optional | Set `VITE_CESIUM_ION_TOKEN` in `.env` |
 | Stadia Maps (alternative OSM style) | Optional | Replace `OSM_STYLE` in `MapView.tsx` |
 

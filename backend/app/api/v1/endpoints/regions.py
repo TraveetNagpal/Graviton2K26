@@ -12,7 +12,7 @@ from geoalchemy2.shape import from_shape
 from apscheduler.triggers.cron import CronTrigger
 
 from app.core.database import get_db
-from app.core.security import get_current_user
+from app.api.deps import get_workspace_user
 from app.models.schema import MonitoringConfiguration, SavedRegion, User
 from app.schemas.ai import ANALYSIS_MODELS
 from app.services.analysis.jobs import run_job, submit
@@ -43,7 +43,7 @@ def validate_geometry(geojson: dict) -> Union[Polygon, MultiPolygon]:
         raise HTTPException(status_code=422, detail={"error": "invalid_area", "detail": str(exc)}) from exc
 
 @router.post("", status_code=201)
-def save_region(payload: RegionPayload, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def save_region(payload: RegionPayload, user: User = Depends(get_workspace_user), db: Session = Depends(get_db)):
     geometry = validate_geometry(payload.geometry)
     multipolygon = MultiPolygon([geometry]) if isinstance(geometry, Polygon) else geometry
     row = SavedRegion(owner_id=user.id, name=payload.name, geometry=from_shape(multipolygon, srid=4326))
@@ -51,12 +51,12 @@ def save_region(payload: RegionPayload, user: User = Depends(get_current_user), 
     return {"id": row.id, "name": row.name, "geometry": mapping(multipolygon)}
 
 @router.get("")
-def list_regions(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def list_regions(user: User = Depends(get_workspace_user), db: Session = Depends(get_db)):
     rows = db.scalars(select(SavedRegion).where(SavedRegion.owner_id == user.id).order_by(SavedRegion.created_at.desc())).all()
     return {"regions": [{"id": row.id, "name": row.name, "geometry": json.loads(db.scalar(select(func.ST_AsGeoJSON(SavedRegion.geometry)).where(SavedRegion.id == row.id)))} for row in rows]}
 
 @router.post("/monitoring", status_code=201)
-def create_monitoring(payload: MonitoringPayload, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def create_monitoring(payload: MonitoringPayload, user: User = Depends(get_workspace_user), db: Session = Depends(get_db)):
     region = db.scalar(select(SavedRegion).where(SavedRegion.id == payload.region_id, SavedRegion.owner_id == user.id))
     if not region: raise HTTPException(status_code=404, detail="Saved region not found")
     try:
@@ -76,12 +76,12 @@ def create_monitoring(payload: MonitoringPayload, user: User = Depends(get_curre
     return {"id": row.id, "name": row.name, "region_id": row.region_id, "analysis_type": row.analysis_type, "schedule": row.schedule, "active": row.active}
 
 @router.get("/monitoring")
-def list_monitoring(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def list_monitoring(user: User = Depends(get_workspace_user), db: Session = Depends(get_db)):
     rows = db.scalars(select(MonitoringConfiguration).where(MonitoringConfiguration.owner_id == user.id).order_by(MonitoringConfiguration.created_at.desc())).all()
     return {"configurations": [{"id": row.id, "name": row.name, "region_id": row.region_id, "analysis_type": row.analysis_type, "schedule": row.schedule, "active": row.active} for row in rows]}
 
 @router.post("/monitoring/{configuration_id}/run", status_code=202)
-def run_monitoring(configuration_id: int, background_tasks: BackgroundTasks, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def run_monitoring(configuration_id: int, background_tasks: BackgroundTasks, user: User = Depends(get_workspace_user), db: Session = Depends(get_db)):
     row = db.scalar(select(MonitoringConfiguration).where(MonitoringConfiguration.id == configuration_id, MonitoringConfiguration.owner_id == user.id, MonitoringConfiguration.active.is_(True)))
     if not row: raise HTTPException(status_code=404, detail="Active monitoring configuration not found")
     analysis_id = submit(row.analysis_type, row.parameters, owner_id=user.id)

@@ -9,7 +9,7 @@ from app.core.config import run_analysis_inline
 from app.schemas.ai import ANALYSIS_MODELS, InvestigationRequest
 from app.services.ai.investigator import asks_for_cause, evidence_for, explain, is_supported_question, measured_finding
 from app.services.analysis.jobs import get_job, run_job, submit
-from app.core.security import get_current_user
+from app.api.deps import get_workspace_user
 from app.models.schema import User
 
 router = APIRouter(prefix="/ai", tags=["AI Earth Investigator"])
@@ -29,7 +29,7 @@ def _validate_region(geojson):
 
 
 @router.post("/investigate")
-async def investigate(payload: InvestigationRequest, background_tasks: BackgroundTasks, user: User = Depends(get_current_user)):
+async def investigate(payload: InvestigationRequest, background_tasks: BackgroundTasks, user: User = Depends(get_workspace_user)):
     """Explain a completed numerical analysis, or initiate a validated supported analysis."""
     question = payload.question.strip()
     if not is_supported_question(question):

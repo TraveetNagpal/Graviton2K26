@@ -56,7 +56,7 @@
 }
 
 .btn.active {
-  background: rgba(34, 211, 238, 0.1);
+  background: rgba(111, 168, 255, 0.12);
   color: var(--color-primary);
   border-color: var(--color-primary);
 }

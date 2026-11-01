@@ -1,5 +1,6 @@
 """Google Earth Engine authentication, catalog search, and processing facade."""
 from __future__ import annotations
+import base64
 import logging
 from typing import Optional
 
@@ -23,8 +24,19 @@ class EarthEngineClient:
         if not self.settings.project:
             return False
         if mode == "service_account":
-            return bool(self.settings.service_account and (self.settings.private_key_json or self.settings.private_key_file))
+            has_key = bool(self.settings.private_key_json or self.settings.private_key_b64 or self.settings.private_key_file)
+            return bool(self.settings.service_account and has_key)
         return mode == "ambient"
+
+    def _service_account_json(self) -> str:
+        if self.settings.private_key_json:
+            return self.settings.private_key_json
+        if self.settings.private_key_b64:
+            try:
+                return base64.b64decode(self.settings.private_key_b64).decode("utf-8")
+            except Exception as exc:
+                raise EarthEngineAuthenticationError("GEE_PRIVATE_KEY_B64 must be base64-encoded service-account JSON") from exc
+        return ""
 
     def initialize(self):
         if self._initialized:
@@ -36,11 +48,13 @@ class EarthEngineClient:
                 if self.settings.private_key_file:
                     credentials = ee.ServiceAccountCredentials(self.settings.service_account, key_file=self.settings.private_key_file)
                 else:
-                    credentials = ee.ServiceAccountCredentials(self.settings.service_account, key_data=self.settings.private_key_json)
+                    credentials = ee.ServiceAccountCredentials(self.settings.service_account, key_data=self._service_account_json())
                 ee.Initialize(credentials, project=self.settings.project)
             else:
                 ee.Initialize(project=self.settings.project)
             self._initialized = True
+        except EarthEngineError:
+            raise
         except Exception as exc:
             logger.error("Earth Engine initialization failed; check server credentials and project access")
             raise EarthEngineAuthenticationError("Earth Engine initialization failed; verify server credentials and project access") from exc

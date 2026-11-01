@@ -1,4 +1,4 @@
-"""Evidence selection and optional, non-numeric LLM interpretation."""
+"""Evidence selection and Gemini-backed, non-numeric interpretation."""
 import json
 import logging
 
@@ -52,8 +52,8 @@ def evidence_for(job: dict) -> dict:
 
 async def explain(question: str, evidence: dict) -> tuple[str, str]:
     settings = get_ai_settings()
-    if not settings.api_key or not settings.model:
-        return ("Automated interpretation is unavailable because no LLM is configured. Use the measured finding, evidence, and limitations below.", "unavailable")
+    if not settings.api_key.strip() or not settings.model.strip():
+        return ("Automated interpretation is unavailable because no Gemini API key is configured. Use the measured finding, evidence, and limitations below.", "unavailable")
     body = {
         "model": settings.model,
         "temperature": 0,
@@ -68,10 +68,10 @@ async def explain(question: str, evidence: dict) -> tuple[str, str]:
             response.raise_for_status()
             content = response.json()["choices"][0]["message"]["content"]
             if not isinstance(content, str) or not content.strip():
-                raise ValueError("LLM returned empty content")
+                raise ValueError("Gemini returned empty content")
             return content.strip(), "available"
     except Exception:
-        logger.exception("Earth Investigator LLM request failed")
+        logger.exception("Gemini interpretation request failed (model=%s)", settings.model)
         return ("Automated interpretation is temporarily unavailable. The measured finding and source evidence are still available below.", "unavailable")
 
 

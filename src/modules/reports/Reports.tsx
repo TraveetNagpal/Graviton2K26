@@ -1,5 +1,5 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
-import { authenticate, downloadReportFile, generateReport, getReport, listReports, saveDownload } from './api';
+import { downloadReportFile, generateReport, getReport, listReports, saveDownload } from './api';
 import type { ReportRecord } from './types';
 import styles from './Reports.module.css';
 
@@ -14,9 +14,6 @@ export default function Reports() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [selected, setSelected] = useState<ReportRecord | null>(null);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [registering, setRegistering] = useState(false);
 
   const refresh = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
@@ -38,12 +35,6 @@ export default function Reports() {
       await refresh();
     } catch (e) { setError(e instanceof Error ? e.message : 'Report generation failed. Check the analysis identifier and try again.'); }
     finally { setSubmitting(false); }
-  }
-
-  async function onAuthenticate(event: FormEvent) {
-    event.preventDefault(); setError('');
-    try { await authenticate(email, password, registering); setPassword(''); await refresh(); }
-    catch (e) { setError(e instanceof Error ? e.message : 'Authentication failed.'); }
   }
 
   async function onDownload(report: ReportRecord, format: 'pdf' | 'csv' | 'geojson') {
@@ -69,7 +60,6 @@ export default function Reports() {
     </form>
 
     {error && <div className={styles.alert} role="alert">{error}</div>}{notice && <div className={styles.notice} role="status">{notice}</div>}
-    {(error.toLowerCase().includes('bearer token') || error.toLowerCase().includes('invalid or expired')) && <form className={styles.auth} onSubmit={onAuthenticate}><h2>Sign in to private reports</h2><p>Reports are private to your account.</p><input type="email" required autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Email address"/><input type="password" required minLength={12} autoComplete={registering ? 'new-password' : 'current-password'} value={password} onChange={e => setPassword(e.target.value)} placeholder="Password (12+ characters)"/><button className={styles.generate}>{registering ? 'Create account' : 'Sign in'}</button><button type="button" className={styles.authToggle} onClick={() => setRegistering(v => !v)}>{registering ? 'Already registered? Sign in' : 'New here? Create an account'}</button></form>}
     <div className={styles.listHeader}><div><h2>Report history</h2><p>Reports remain linked to their source analysis, observations, and method.</p></div><span className={styles.count}>{reports.length} reports</span></div>
     <div className={styles.tableWrap}><table><thead><tr><th>REPORT</th><th>REGION</th><th>ANALYSIS TYPE</th><th>CREATED</th><th>STATUS</th><th>DOWNLOADS</th></tr></thead><tbody>
       {loading ? <tr><td colSpan={6} className={styles.empty}>Loading report history…</td></tr> : reports.length === 0 ? <tr><td colSpan={6} className={styles.empty}>{error ? 'Report history is unavailable until the API connection is restored.' : 'No reports yet. Generate one from a completed analysis.'}</td></tr> : reports.map(report => <tr key={report.id}>

@@ -12,10 +12,8 @@ from app.schemas.contracts import PrepareObservationRequest, SatelliteSearchRequ
 from app.services.earth_engine.client import earth_engine_client
 from app.services.earth_engine.errors import EarthEngineError
 from app.services.earth_engine.settings import get_ee_settings
-from app.core.security import get_current_user
-from app.models.schema import User
-from app.models.schema import SatelliteObservation
 from app.core.database import get_db
+from app.models.schema import SatelliteObservation
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -42,7 +40,7 @@ def earth_engine_status():
 
 
 @router.post("/satellite/search")
-def satellite_search(payload: SatelliteSearchRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def satellite_search(payload: SatelliteSearchRequest, db: Session = Depends(get_db)):
     settings = get_ee_settings()
     days = (payload.end_date - payload.start_date).days
     if days > settings.max_search_days:

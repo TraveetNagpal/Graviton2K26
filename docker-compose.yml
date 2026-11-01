@@ -17,7 +17,6 @@ services:
     build: ./backend
     environment:
       DATABASE_URL: postgresql+psycopg://terramind:${POSTGRES_PASSWORD}@db:5432/terramind
-      AUTH_SECRET: ${AUTH_SECRET:?Set AUTH_SECRET in .env}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
       ENVIRONMENT: production
       REPORT_STORAGE_DIR: /var/lib/terramind/reports
@@ -27,10 +26,10 @@ services:
       GEE_AUTH_MODE: ${GEE_AUTH_MODE:-service_account}
       GEE_SERVICE_ACCOUNT: ${GEE_SERVICE_ACCOUNT:-}
       GEE_PRIVATE_KEY_FILE: ${GEE_PRIVATE_KEY_FILE:-/run/secrets/earth-engine-service-account.json}
-      LLM_API_KEY: ${LLM_API_KEY:-}
-      LLM_MODEL: ${LLM_MODEL:-}
-      LLM_BASE_URL: ${LLM_BASE_URL:-https://api.openai.com/v1}
-      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-20}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.5-flash}
+      GEMINI_BASE_URL: ${GEMINI_BASE_URL:-https://generativelanguage.googleapis.com/v1beta/openai}
+      GEMINI_TIMEOUT_SECONDS: ${GEMINI_TIMEOUT_SECONDS:-30}
     volumes:
       - reports:/var/lib/terramind/reports
       - ${GEE_KEY_HOST_PATH:-./secrets/earth-engine-service-account.json}:/run/secrets/earth-engine-service-account.json:ro
@@ -49,6 +48,9 @@ services:
       context: .
       args:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000/api}
+        VITE_GOOGLE_MAPS_API_KEY: ${VITE_GOOGLE_MAPS_API_KEY:-}
+        VITE_GOOGLE_MAPS_MAP_TYPE: ${VITE_GOOGLE_MAPS_MAP_TYPE:-satellite}
+        VITE_CESIUM_ION_TOKEN: ${VITE_CESIUM_ION_TOKEN:-}
     ports:
       - "8080:80"
     depends_on:

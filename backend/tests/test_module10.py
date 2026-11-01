@@ -1,12 +1,9 @@
 from types import SimpleNamespace
 from unittest.mock import patch
-import pytest
-from fastapi import HTTPException
-from fastapi.security import HTTPAuthorizationCredentials
 
 from fastapi.testclient import TestClient
 
-from app.core.security import get_current_user, hash_password, verify_password
+from app.api.deps import get_workspace_user
 from app.main import app
 from app.services.reports.pdf_builder import build_analysis_pdf
 from app.services.analysis.jobs import submit
@@ -14,15 +11,7 @@ from app.services.analysis.jobs import run_job
 from app.api.v1.endpoints.reports import GenerateReportRequest, generate_report
 
 client = TestClient(app)
-app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(id=1)
-
-
-def test_password_hashing_uses_salted_one_way_verification():
-    first = hash_password("a-long-test-password")
-    second = hash_password("a-long-test-password")
-    assert first != second
-    assert verify_password("a-long-test-password", first)
-    assert not verify_password("wrong-password", first)
+app.dependency_overrides[get_workspace_user] = lambda: SimpleNamespace(id=1)
 
 
 def test_report_pdf_contains_actual_provenance_and_handles_missing_values():
@@ -44,7 +33,7 @@ def test_report_generation_rejects_unknown_analysis_id():
     assert response.status_code == 404
 
 
-def test_report_generation_cannot_read_another_users_analysis():
+def test_report_generation_cannot_read_another_workspace_analysis():
     analysis_id = submit("vegetation", {}, owner_id=2)
     response = client.post("/api/reports/generate", json={"analysis_id": analysis_id})
     assert response.status_code == 404
@@ -75,21 +64,13 @@ def test_completed_analysis_generates_traceable_pdf_and_measurement_csv(tmp_path
     assert report["sourceAnalysisId"] == analysis_id
     assert report["observationDates"] == ["2025-01-01", "2026-01-01"]
     assert db.row.owner_id == 1
+    assert db.row.pdf_artifact.startswith(b"%PDF")
+    assert b"mapped_increase_area_ha,2.5,ha" in db.row.csv_artifact
+    assert b"mean_ndvi_difference,,index" not in db.row.csv_artifact
     assert (tmp_path / f"{report['id']}.pdf").read_bytes().startswith(b"%PDF")
     csv_text = (tmp_path / f"{report['id']}.csv").read_text(encoding="utf-8")
     assert "mapped_increase_area_ha,2.5,ha" in csv_text
     assert "mean_ndvi_difference,,index" not in csv_text
-
-
-def test_missing_or_invalid_bearer_credentials_are_rejected(monkeypatch):
-    monkeypatch.setattr("app.core.security.get_settings", lambda: SimpleNamespace(auth_secret="s" * 40))
-    with pytest.raises(HTTPException) as missing:
-        get_current_user(None, None)
-    assert missing.value.status_code == 401
-    credentials = HTTPAuthorizationCredentials(scheme="Bearer", credentials="invalid.token.signature")
-    with pytest.raises(HTTPException) as invalid:
-        get_current_user(credentials, None)
-    assert invalid.value.status_code == 401
 
 
 def test_processing_errors_are_not_returned_as_successful_analysis_results():
