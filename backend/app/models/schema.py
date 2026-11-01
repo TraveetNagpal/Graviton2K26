@@ -5,7 +5,7 @@ only references and compact result metadata are stored in PostgreSQL.
 """
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Index, Integer, String, Text, func
+from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Index, Integer, LargeBinary, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from geoalchemy2 import Geometry
@@ -93,6 +93,9 @@ class Report(Base):
     title: Mapped[str] = mapped_column(String(250))
     status: Mapped[str] = mapped_column(String(20), index=True)
     artifact_uri: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Durable copies so downloads survive restarts and read-only serverless filesystems.
+    pdf_artifact: Mapped[Optional[bytes]] = mapped_column(LargeBinary, nullable=True)
+    csv_artifact: Mapped[Optional[bytes]] = mapped_column(LargeBinary, nullable=True)
     geojson_available: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     metadata_json: Mapped[dict] = mapped_column(JSONB, default=dict)
     error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

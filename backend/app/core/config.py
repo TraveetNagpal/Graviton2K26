@@ -2,7 +2,7 @@
 import os
 from functools import lru_cache
 
-from pydantic import AliasChoices, Field, field_validator, model_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import make_url
 
@@ -10,7 +10,9 @@ _LOCAL_DATABASE_URL = "postgresql+psycopg://terramind:terramind@localhost:5432/t
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    # Read the backend .env first and fall back to the repository-root .env that
+    # local development uses for shared secrets (later files win).
+    model_config = SettingsConfigDict(env_file=("../.env", ".env"), extra="ignore")
     # Neon's Vercel integration exposes DATABASE_URL plus POSTGRES_URL variants.
     database_url: str = Field(
         default=_LOCAL_DATABASE_URL,
@@ -18,8 +20,6 @@ class Settings(BaseSettings):
     )
     cors_origins: str = Field(default="*", validation_alias="CORS_ORIGINS")
     environment: str = Field(default="development", validation_alias="ENVIRONMENT")
-    auth_secret: str = Field(default="", validation_alias="AUTH_SECRET")
-    auth_token_minutes: int = Field(default=60, ge=5, le=1440, validation_alias="AUTH_TOKEN_MINUTES")
     max_request_bytes: int = Field(default=1_000_000, ge=1024, validation_alias="MAX_REQUEST_BYTES")
     report_storage_dir: str = Field(default="./data/reports", validation_alias="REPORT_STORAGE_DIR")
     persist_analysis_jobs: bool = Field(default=False, validation_alias="PERSIST_ANALYSIS_JOBS")
@@ -37,12 +37,6 @@ class Settings(BaseSettings):
         if url.host not in (None, "localhost", "127.0.0.1", "::1") and "sslmode" not in url.query:
             url = url.update_query_dict({"sslmode": "require"})
         return url.render_as_string(hide_password=False)
-
-    @model_validator(mode="after")
-    def strong_auth_secret(self):
-        if self.auth_secret and len(self.auth_secret) < 32:
-            raise ValueError("AUTH_SECRET must contain at least 32 characters")
-        return self
 
 
 @lru_cache

@@ -22,7 +22,7 @@ uvicorn app.main:app --reload
 ### Earth Engine setup
 
 1. Create/select a Google Cloud project, register it for Google Earth Engine, enable the Earth Engine API, and authorize the service identity for Earth Engine access.
-2. From the repository root, copy `.env.example` to `backend/.env`. Configure `GEE_PROJECT`, `GEE_SERVICE_ACCOUNT` and either `GEE_PRIVATE_KEY_JSON` (the entire service-account JSON document) or `GEE_PRIVATE_KEY_FILE`. Workload identity can be used with `GEE_AUTH_MODE=ambient`. On Vercel, use `GEE_PRIVATE_KEY_B64` (base64 of the JSON file) so newlines survive the environment variable.
+2. From the repository root, copy `.env.example` to `backend/.env` (a repository-root `.env` is also read as a fallback). Configure `GEE_PROJECT`, `GEE_SERVICE_ACCOUNT` and either `GEE_PRIVATE_KEY_JSON` (the entire service-account JSON document) or `GEE_PRIVATE_KEY_FILE`. Workload identity can be used with `GEE_AUTH_MODE=ambient`. On Vercel, use `GEE_PRIVATE_KEY_B64` (base64 of the JSON file) so newlines survive the environment variable.
 3. Keep private keys in a secret manager or protected runtime mount. Never commit `.env` or expose credentials to frontend code.
 4. The optional Google Maps satellite basemap uses `VITE_GOOGLE_MAPS_API_KEY` (see [map credentials](docs/map-integration.md#map-credentials)). This is a public browser key; restrict it by HTTP referrer. Without it the maps fall back to OpenStreetMap.
 
@@ -83,30 +83,30 @@ Run tests from `backend/` using `pytest`. Earth Engine credentials are not requi
 
 ## Reports (Module 9)
 
-The `/reports` page lists the signed-in user's report history and lets them submit a source analysis ID for report generation. Configure `VITE_API_BASE_URL` to the API root (for example `http://localhost:8000/api`). The API implements `POST /reports/generate`, `GET /reports`, `GET /reports/{report_id}`, and owner-authorized artifact downloads. See [the API and integration contract](docs/map-integration.md#module-9--reports-and-exports) for response shape, authorization, provenance, and artifact requirements.
+The `/reports` page lists the workspace report history and lets you submit a source analysis ID for report generation. Configure `VITE_API_BASE_URL` to the API root (for example `http://localhost:8000/api`). The API implements `POST /reports/generate`, `GET /reports`, `GET /reports/{report_id}`, and artifact downloads. See [the API and integration contract](docs/map-integration.md#module-9--reports-and-exports) for response shape, provenance, and artifact requirements.
 
-The report service now builds PDF and CSV artifacts from completed backend analysis records. The frontend does not fabricate analysis values; GeoJSON is offered only when compatible vector output exists (the current change layers are rasters, so GeoJSON is disabled).
+The report service now builds PDF and CSV artifacts from completed backend analysis records. Artifact bytes are stored with the report row in PostgreSQL, so downloads keep working after restarts and on read-only serverless filesystems; `REPORT_STORAGE_DIR` is only an optional local streaming cache. The frontend does not fabricate analysis values; GeoJSON is offered only when compatible vector output exists (the current change layers are rasters, so GeoJSON is disabled).
 
-## Module 10 — local deployment and security
+## Module 10 — local deployment
 
 The integrated application uses the existing Vite/React explorer and FastAPI backend. PostgreSQL with PostGIS stores users, saved regions, satellite observation metadata, analysis job/result metadata, monitoring configurations, alerts, and report metadata. Raster pixels remain in Earth Engine or external raster storage; reports are written to the mounted report artifact volume.
 
 ### Run the integrated stack
 
-1. Copy `.env.example` to `.env` and set strong random `POSTGRES_PASSWORD` and `AUTH_SECRET` values. For example, use `openssl rand -hex 32` for each secret. Never commit `.env`, Earth Engine keys, or generated reports.
+1. Copy `.env.example` to `.env` and set a strong random `POSTGRES_PASSWORD` value (for example from `openssl rand -hex 32`). Never commit `.env`, Earth Engine keys, or generated reports.
 2. Put the authorized Earth Engine service account JSON at `./secrets/earth-engine-service-account.json` (or set `GEE_KEY_HOST_PATH` to its protected host path). The backend mounts it read-only. Set `GEE_PROJECT` and `GEE_SERVICE_ACCOUNT` to match.
 3. Run `docker compose up --build`. Compose starts PostGIS, runs Alembic migrations before FastAPI, and serves the frontend at `http://localhost:8080`. The backend API is at `http://localhost:8000`; health and readiness are `/health` and `/ready`.
-4. Open Reports and create an account (password minimum 12 characters). Then open the Explorer, draw a polygon, search actual catalog observations, choose two dates, and run vegetation analysis. Results and report downloads are scoped to the signed-in account.
+4. Open the Explorer, draw a polygon, search actual catalog observations, choose two dates, and run vegetation analysis. Results and report downloads are stored in the shared workspace.
 
 For frontend-only development, run `npm install` and `npm run dev`; Vite proxies `/api` to a backend on port 8000. For backend development, install `backend/requirements.txt`, set the same server environment variables, start PostgreSQL/PostGIS, then run `alembic upgrade head` and `uvicorn app.main:app --reload` from `backend/`.
 
 ### Configuration and API security
 
-`AUTH_SECRET` is mandatory for authentication; Compose refuses to start without it. The API issues expiring bearer tokens from `/api/auth/register` and `/api/auth/token`. Protected analysis, catalog, investigator, reports, saved-region, and monitoring routes require `Authorization: Bearer …`. Private queries filter by owner. `CORS_ORIGINS`, `MAX_REQUEST_BYTES`, and the per-IP request limits are server-side settings. Earth Engine and LLM credentials are read only by FastAPI. Do not use a frontend `VITE_` or `NEXT_PUBLIC_` prefix for private credentials.
+Authentication is disabled. Every request operates on a single shared workspace identity so owned records (reports, saved regions, monitoring configurations) keep valid database foreign keys. There is no sign-in step and no bearer token. `CORS_ORIGINS`, `MAX_REQUEST_BYTES`, and the per-IP request limits are server-side settings. Earth Engine and Gemini credentials are read only by FastAPI. Do not use a frontend `VITE_` or `NEXT_PUBLIC_` prefix for private credentials. This configuration is suitable for local or trusted demos; add authentication before exposing the API as a public multi-user service.
 
 Database changes are under `backend/migrations/`; apply with `alembic upgrade head` from `backend/`. Use `alembic revision --autogenerate -m "description"` for future schema changes and review generated migrations before applying. PostgreSQL/PostGIS is required for saved-region geometry.
 
-Monitoring configurations retain an owner-scoped region, UTC five-field cron schedule, analysis type, and validated analysis parameters. Compose enables the APScheduler trigger, and `/api/regions/monitoring/{id}/run` also allows an authenticated manual run. Schedule expressions rerun the saved analysis parameters; choose up-to-date source observations when changing a configuration. Analysis execution uses FastAPI background tasks and PostgreSQL status/result persistence when `PERSIST_ANALYSIS_JOBS=true`; run one backend worker because APScheduler is process-local. For multi-worker execution, replace the in-process scheduler/task dispatch and ephemeral Earth Engine map objects with a distributed durable queue and regenerate map tokens from persisted source metadata.
+Monitoring configurations retain an owner-scoped region, UTC five-field cron schedule, analysis type, and validated analysis parameters. Compose enables the APScheduler trigger, and `/api/regions/monitoring/{id}/run` also allows a manual run. Schedule expressions rerun the saved analysis parameters; choose up-to-date source observations when changing a configuration. Analysis execution uses FastAPI background tasks and PostgreSQL status/result persistence when `PERSIST_ANALYSIS_JOBS=true`; run one backend worker because APScheduler is process-local. For multi-worker execution, replace the in-process scheduler/task dispatch and ephemeral Earth Engine map objects with a distributed durable queue and regenerate map tokens from persisted source metadata.
 
 ### Tests and operational limits
 
@@ -129,11 +129,10 @@ Import this repository into Vercel with the repository root as the project root,
 - `VITE_API_BASE_URL=/api`
 - `VITE_GOOGLE_MAPS_API_KEY` — Google Maps Platform browser key with the **Maps Tile API** enabled (optional; OSM is used when absent). Restrict it by HTTP referrer.
 - `VITE_GOOGLE_MAPS_MAP_TYPE` — `satellite` (default), `roadmap`, or `terrain`.
-- `AUTH_SECRET` — unique random value of at least 32 characters.
 - Earth Engine credentials: `GEE_PROJECT`, `GEE_AUTH_MODE=service_account`, `GEE_SERVICE_ACCOUNT`, and `GEE_PRIVATE_KEY_B64` (base64 of the service-account JSON, e.g. `base64 -i key.json | tr -d '\n'`). `GEE_PRIVATE_KEY_JSON` also works.
 - `GEMINI_API_KEY` — Google AI Studio key used server-side for the Earth Investigator and report interpretations. `GEMINI_MODEL` defaults to `gemini-3.5-flash`; `GEMINI_BASE_URL` and `GEMINI_TIMEOUT_SECONDS` are optional.
 - `PERSIST_ANALYSIS_JOBS=true` so job status survives function instances.
-- `REPORT_STORAGE_DIR=/tmp/terramind-reports` if report generation is enabled.
+- `REPORT_STORAGE_DIR` is optional. Report artifacts are persisted in PostgreSQL, so no writable directory is required.
 - `MONITORING_SCHEDULER_ENABLED=false` and `MONITOR_SCHEDULER_ENABLED=false`; Vercel functions do not provide a persistent process for the in-process schedulers.
 - `CORS_ORIGINS` — comma-separated allowed browser origins (`*` is fine for a public demo).
 
@@ -146,7 +145,7 @@ cd backend
 DATABASE_URL='postgresql+psycopg://…' alembic upgrade head
 ```
 
-Vercel's function filesystem is temporary: reports written under `/tmp` are not durable, and Earth Engine tile-map objects remain process-local. Use durable object storage for generated report artifacts and a persistent worker/queue for scheduled monitoring before relying on those features in production. `vercel dev -L` runs the configured services locally without linking a Vercel project.
+Report artifacts are durable because their bytes live in PostgreSQL. Earth Engine tile-map objects remain process-local, but the layers endpoint rebuilds them from the persisted analysis request on a new instance. Module 8 monitoring data uses a SQLite file; on Vercel it falls back to `/tmp`, which is per-instance and ephemeral, so use Docker or a persistent disk for durable scheduled monitoring. `vercel dev -L` runs the configured services locally without linking a Vercel project.
 
 ### Serverless analysis behavior
 

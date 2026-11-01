@@ -15,7 +15,6 @@ from app.api.v1.endpoints.satellite import router as satellite_router
 from app.api.v1.endpoints.analysis import router as analysis_router
 from app.api.v1.endpoints.ai import router as ai_router
 from app.api.v1.endpoints.reports import router as reports_router
-from app.api.v1.endpoints.auth import router as auth_router
 from app.api.v1.endpoints.regions import router as regions_router
 from app.api.v1.endpoints.monitoring import router as monitoring_router
 from app.core.config import get_settings, should_auto_migrate
@@ -60,7 +59,6 @@ app.include_router(satellite_router, prefix="/api")
 app.include_router(analysis_router, prefix="/api")
 app.include_router(ai_router, prefix="/api")
 app.include_router(reports_router, prefix="/api")
-app.include_router(auth_router, prefix="/api")
 app.include_router(regions_router, prefix="/api")
 app.include_router(monitoring_router, prefix="/api")
 
@@ -76,14 +74,14 @@ async def request_size_limit(request: Request, call_next):
             return JSONResponse(status_code=413, content={"detail": "Request body exceeds the configured size limit"})
     except ValueError:
         return JSONResponse(status_code=400, content={"detail": "Invalid Content-Length header"})
-    if request.url.path.startswith(("/api/auth", "/api/satellite/search", "/api/analysis", "/api/ai/investigate")):
+    if request.url.path.startswith(("/api/satellite/search", "/api/analysis", "/api/ai/investigate")):
         key = (request.client.host if request.client else "unknown", request.url.path.split("/")[2])
         now = monotonic()
         with _rate_lock:
             bucket = _rate_buckets[key]
             while bucket and now - bucket[0] > 60:
                 bucket.popleft()
-            limit = 10 if key[1] == "auth" else 20 if key[1] == "satellite" else 60
+            limit = 20 if key[1] == "satellite" else 60
             if len(bucket) >= limit:
                 return JSONResponse(status_code=429, content={"detail": "Request rate limit exceeded; try again shortly"}, headers={"Retry-After": "60"})
             bucket.append(now)

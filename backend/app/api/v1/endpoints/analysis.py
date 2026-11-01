@@ -7,7 +7,7 @@ from shapely.validation import explain_validity
 from app.core.config import run_analysis_inline
 from app.schemas.contracts import HistoricalTrendRequest, VegetationAnalysisRequest, WaterAnalysisRequest, UrbanAnalysisRequest
 from app.services.analysis.jobs import get_job, get_layer_tiles, run_job, run_trend_job, submit
-from app.core.security import get_current_user
+from app.api.deps import get_workspace_user
 from app.models.schema import User
 
 
@@ -70,25 +70,25 @@ def _submit(kind, payload, background_tasks, user):
 
 
 @router.post("/vegetation", status_code=202)
-def analyze_vegetation(payload: VegetationAnalysisRequest, background_tasks: BackgroundTasks, user: User = Depends(get_current_user)):
+def analyze_vegetation(payload: VegetationAnalysisRequest, background_tasks: BackgroundTasks, user: User = Depends(get_workspace_user)):
     """Measure NDVI change. Negative differences indicate index decrease, not proof of vegetation loss."""
     return _submit("vegetation", payload, background_tasks, user)
 
 
 @router.post("/water", status_code=202)
-def analyze_water(payload: WaterAnalysisRequest, background_tasks: BackgroundTasks, user: User = Depends(get_current_user)):
+def analyze_water(payload: WaterAnalysisRequest, background_tasks: BackgroundTasks, user: User = Depends(get_workspace_user)):
     """Measure McFeeters NDWI water extent change using the configured threshold."""
     return _submit("water", payload, background_tasks, user)
 
 
 @router.post("/urban", status_code=202)
-def analyze_urban(payload: UrbanAnalysisRequest, background_tasks: BackgroundTasks, user: User = Depends(get_current_user)):
+def analyze_urban(payload: UrbanAnalysisRequest, background_tasks: BackgroundTasks, user: User = Depends(get_workspace_user)):
     """Measure NDBI built-up proxy change; does not detect individual buildings."""
     return _submit("urban", payload, background_tasks, user)
 
 
 @router.post("/trend", status_code=202)
-def analyze_trend(payload: HistoricalTrendRequest, background_tasks: BackgroundTasks, user: User = Depends(get_current_user)):
+def analyze_trend(payload: HistoricalTrendRequest, background_tasks: BackgroundTasks, user: User = Depends(get_workspace_user)):
     """Compare actual selected observations with a baseline; exact repeated requests reuse cached jobs."""
     try:
         geometry = shape(payload.area_of_interest)
@@ -119,7 +119,7 @@ def analyze_trend(payload: HistoricalTrendRequest, background_tasks: BackgroundT
 
 
 @router.get("/{analysis_id}")
-def get_analysis(analysis_id: str, user: User = Depends(get_current_user)):
+def get_analysis(analysis_id: str, user: User = Depends(get_workspace_user)):
     job = get_job(analysis_id)
     if not job:
         raise HTTPException(status_code=404, detail="Analysis not found")
@@ -133,7 +133,7 @@ def get_analysis(analysis_id: str, user: User = Depends(get_current_user)):
 
 
 @router.get("/{analysis_id}/layers")
-def get_analysis_layers(analysis_id: str, user: User = Depends(get_current_user)):
+def get_analysis_layers(analysis_id: str, user: User = Depends(get_workspace_user)):
     job = get_job(analysis_id)
     if not job or job.get("owner_id") != user.id:
         raise HTTPException(status_code=404, detail="Analysis not found")
