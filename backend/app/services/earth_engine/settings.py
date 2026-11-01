@@ -1,4 +1,4 @@
-from functools import lru_cache
+﻿from functools import lru_cache
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -6,9 +6,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class EarthEngineSettings(BaseSettings):
     # Match the application settings: backend/.env first, repository-root .env as fallback.
     model_config = SettingsConfigDict(env_file=("../.env", ".env"), extra="ignore")
-    project: str = Field(default="", validation_alias="GEE_PROJECT")
-    service_account: str = Field(default="", validation_alias="GEE_SERVICE_ACCOUNT")
-    private_key_json: str = Field(default="", validation_alias="GEE_PRIVATE_KEY_JSON")
+    project: str = Field(default="", validation_alias=AliasChoices("EE_PROJECT_ID", "GEE_PROJECT"))
+    service_account: str = Field(default="", validation_alias=AliasChoices("EE_SERVICE_ACCOUNT", "GEE_SERVICE_ACCOUNT"))
+    private_key_json: str = Field(default="", validation_alias=AliasChoices("EE_SERVICE_ACCOUNT_KEY_JSON", "GEE_PRIVATE_KEY_JSON"))
     private_key_b64: str = Field(default="", validation_alias=AliasChoices("GEE_PRIVATE_KEY_B64", "GEE_PRIVATE_KEY_JSON_B64"))
     private_key_file: str = Field(default="", validation_alias="GEE_PRIVATE_KEY_FILE")
     auth_mode: str = Field(default="service_account", validation_alias="GEE_AUTH_MODE")

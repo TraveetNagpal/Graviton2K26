@@ -22,9 +22,26 @@ uvicorn app.main:app --reload
 ### Earth Engine setup
 
 1. Create/select a Google Cloud project, register it for Google Earth Engine, enable the Earth Engine API, and authorize the service identity for Earth Engine access.
-2. From the repository root, copy `.env.example` to `backend/.env` (a repository-root `.env` is also read as a fallback). Configure `GEE_PROJECT`, `GEE_SERVICE_ACCOUNT` and either `GEE_PRIVATE_KEY_JSON` (the entire service-account JSON document) or `GEE_PRIVATE_KEY_FILE`. Workload identity can be used with `GEE_AUTH_MODE=ambient`. On Vercel, use `GEE_PRIVATE_KEY_B64` (base64 of the JSON file) so newlines survive the environment variable.
-3. Keep private keys in a secret manager or protected runtime mount. Never commit `.env` or expose credentials to frontend code.
+2. From the repository root, copy `.env.example` to `backend/.env` (a repository-root `.env` is also read as a fallback). Configure `GEE_PROJECT`, `GEE_SERVICE_ACCOUNT` and either `GEE_PRIVATE_KEY_JSON` (the entire service-account JSON document) or `GEE_PRIVATE_KEY_FILE`. The backend also accepts the `EE_PROJECT_ID`, `EE_SERVICE_ACCOUNT` and `EE_SERVICE_ACCOUNT_KEY_JSON` names written by the local setup script below. Workload identity can be used with `GEE_AUTH_MODE=ambient`. On Vercel, use `GEE_PRIVATE_KEY_B64` (base64 of the JSON file) so newlines survive the environment variable.
+3. Keep private keys in a secret manager, a protected runtime mount, or the ignored local `backend/.env` file. Never commit `.env` or expose credentials to frontend code.
 4. The optional Google Maps satellite basemap uses `VITE_GOOGLE_MAPS_API_KEY` (see [map credentials](docs/map-integration.md#map-credentials)). This is a public browser key; restrict it by HTTP referrer. Without it the maps fall back to OpenStreetMap.
+
+#### Local Gemini and Earth Engine credentials
+
+This repository has a Vite frontend and a FastAPI backend; it does not use Cloudflare Pages Functions, so `.dev.vars` is not part of the local configuration. The backend reads `backend/.env` when started from the `backend/` directory.
+
+From PowerShell at the repository root, run:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\scripts\configure-local-credentials.ps1
+```
+
+The script asks for the Google Cloud project ID, then uses hidden prompts for the Gemini API key and the complete Earth Engine service-account JSON. Paste the service-account JSON on one line when prompted. It preserves other entries in `backend/.env` and does not display the values. It writes `GEMINI_API_KEY`, `EE_PROJECT_ID`, and `EE_SERVICE_ACCOUNT_KEY_JSON` to the backend environment file. To avoid changing PowerShell's persistent policy, the process-scoped setting ends when that PowerShell window closes. Restart the backend after running it, because `uvicorn --reload` does not reload `.env`.
+
+Before the Earth Engine check succeeds, the Google Cloud project must be registered for Earth Engine and the Earth Engine API must be enabled. The service account also needs project permissions: the Earth Engine Resource Viewer role and the Service Usage Consumer role. Without Service Usage Consumer, Earth Engine returns a 403 `USER_PROJECT_DENIED` error even though the key itself is valid. The backend's Earth Engine Python client performs the service-account OAuth token exchange and refresh internally. After filling credentials, start the backend from `backend/` and check `http://localhost:8000/api/earth-engine/status`. The response reports status and project ID only; it does not return credentials. A successful status verifies that token generation and API access worked.
+
+Gemini calls are made only from the backend, through Google's OpenAI-compatible endpoint (see Module 6). `GEMINI_MODEL` can override the default model. Do not put Gemini credentials in any `VITE_` variable because Vite embeds those values into browser code.
 
 ### Satellite API
 

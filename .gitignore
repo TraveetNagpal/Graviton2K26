@@ -7,8 +7,13 @@ dist-ssr/
 
 # Environment (never commit secrets)
 .env
+.env.*
+!.env.example
+!.env.*.example
 .env.local
 .env.*.local
+.dev.vars
+.dev.vars.*
 
 # Logs
 *.log
@@ -34,6 +39,9 @@ Thumbs.db
 *.pem
 *.key
 *service-account*.json
+*service_account*.json
+*-credentials.json
+credentials*.json
 .venv/
 *.sqlite3
 *.sqlite3-shm

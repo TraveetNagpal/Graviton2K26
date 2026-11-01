@@ -1,7 +1,9 @@
 """Google Earth Engine authentication, catalog search, and processing facade."""
 from __future__ import annotations
 import base64
+import json
 import logging
+import re
 from typing import Optional
 
 import ee
@@ -14,6 +16,41 @@ from .settings import EarthEngineSettings, get_ee_settings
 logger = logging.getLogger(__name__)
 
 
+def _sanitized_error_message(exc: Exception, settings: EarthEngineSettings) -> str:
+    """Return useful provider diagnostics after removing credential material."""
+    message = str(exc)
+    sensitive_values = [
+        settings.private_key_json,
+        settings.private_key_b64,
+        settings.service_account,
+        settings.private_key_file,
+    ]
+    if settings.private_key_json:
+        try:
+            key_info = json.loads(settings.private_key_json)
+            sensitive_values.extend((key_info.get("client_email", ""), key_info.get("private_key", "")))
+        except (TypeError, ValueError):
+            pass
+    for value in sorted((value for value in sensitive_values if value), key=len, reverse=True):
+        message = message.replace(value, "[REDACTED]")
+
+    message = re.sub(
+        r"-----BEGIN [^-]*PRIVATE KEY-----.*?-----END [^-]*PRIVATE KEY-----",
+        "[REDACTED PRIVATE KEY]",
+        message,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    message = re.sub(r"(?i)(bearer\s+)[A-Za-z0-9._~+/-]+=*", r"\1[REDACTED]", message)
+    message = re.sub(r"\bAIza[0-9A-Za-z_-]{20,}\b", "[REDACTED API KEY]", message)
+    message = re.sub(
+        r'(?i)(["\']?(?:private_key|client_secret|access_token|refresh_token|id_token|api_key)["\']?\s*[:=]\s*)'
+        r'("(?:\\.|[^"\\])*"|\'[^\']*\'|[^\s,)}]+)',
+        r"\1[REDACTED]",
+        message,
+    )
+    return message[:500] if message else "[no provider error message]"
+
+
 class EarthEngineClient:
     def __init__(self, settings: Optional[EarthEngineSettings] = None):
         self.settings = settings or get_ee_settings()
@@ -24,8 +61,9 @@ class EarthEngineClient:
         if not self.settings.project:
             return False
         if mode == "service_account":
-            has_key = bool(self.settings.private_key_json or self.settings.private_key_b64 or self.settings.private_key_file)
-            return bool(self.settings.service_account and has_key)
+            if self.settings.private_key_file:
+                return bool(self.settings.service_account)
+            return bool(self.settings.private_key_json or self.settings.private_key_b64)
         return mode == "ambient"
 
     def _service_account_json(self) -> str:
@@ -48,7 +86,15 @@ class EarthEngineClient:
                 if self.settings.private_key_file:
                     credentials = ee.ServiceAccountCredentials(self.settings.service_account, key_file=self.settings.private_key_file)
                 else:
-                    credentials = ee.ServiceAccountCredentials(self.settings.service_account, key_data=self._service_account_json())
+                    # The standard Google service-account JSON contains its identity.
+                    # Earth Engine's credential class handles the OAuth JWT exchange
+                    # and token refresh; credentials stay inside this backend process.
+                    key_json = self._service_account_json()
+                    key_info = json.loads(key_json)
+                    account_email = self.settings.service_account or key_info.get("client_email", "")
+                    if not account_email or not key_info.get("private_key"):
+                        raise ValueError("Service-account JSON is missing required fields")
+                    credentials = ee.ServiceAccountCredentials(account_email, key_data=key_json)
                 ee.Initialize(credentials, project=self.settings.project)
             else:
                 ee.Initialize(project=self.settings.project)
@@ -56,7 +102,11 @@ class EarthEngineClient:
         except EarthEngineError:
             raise
         except Exception as exc:
-            logger.error("Earth Engine initialization failed; check server credentials and project access")
+            logger.error(
+                "Earth Engine initialization failed (%s): %s",
+                type(exc).__name__,
+                _sanitized_error_message(exc, self.settings),
+            )
             raise EarthEngineAuthenticationError("Earth Engine initialization failed; verify server credentials and project access") from exc
 
     def status(self):
@@ -68,8 +118,12 @@ class EarthEngineClient:
             return {"configured": True, "authenticated": True, "project": self.settings.project, "auth_mode": self.settings.auth_mode, "message": "Earth Engine initialized"}
         except EarthEngineError as exc:
             return {"configured": True, "authenticated": False, "project": self.settings.project, "auth_mode": self.settings.auth_mode, "message": str(exc)}
-        except Exception:
-            logger.exception("Earth Engine status failed")
+        except Exception as exc:
+            logger.error(
+                "Earth Engine status check failed (%s): %s",
+                type(exc).__name__,
+                _sanitized_error_message(exc, self.settings),
+            )
             return {"configured": True, "authenticated": False, "project": self.settings.project, "auth_mode": self.settings.auth_mode, "message": "Earth Engine credentials could not access the API"}
 
     @staticmethod
