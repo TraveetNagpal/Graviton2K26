@@ -1,42 +1,42 @@
+import { apiFetch, readJson } from '@/lib/api';
 import type { ReportRecord, ReportResponse } from './types';
-
-const API_BASE = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '').replace(/\/v1$/, '');
-const reportsUrl = `${API_BASE}/reports`;
 
 async function parseError(response: Response): Promise<string> {
   try {
-    const data = await response.json();
-    return data.message || data.detail || `Request failed (${response.status})`;
+    const data = await readJson(response);
+    return data?.message || data?.detail?.detail || data?.detail || data?.error || `Request failed (${response.status})`;
   } catch {
     return `Request failed (${response.status})`;
   }
 }
 
-export async function listReports(signal?: AbortSignal): Promise<ReportRecord[]> {
-  const response = await fetch(reportsUrl, { signal });
+async function readOkJson<T>(response: Response): Promise<T> {
   if (!response.ok) throw new Error(await parseError(response));
-  const data = await response.json();
+  return (await readJson(response)) as T;
+}
+
+export async function listReports(signal?: AbortSignal): Promise<ReportRecord[]> {
+  const response = await apiFetch('/reports', { signal });
+  const data = await readOkJson<ReportRecord[] | { reports: ReportRecord[] }>(response);
   return Array.isArray(data) ? data : data.reports;
 }
 
 export async function generateReport(analysisId: string, title: string): Promise<ReportResponse> {
-  const response = await fetch(`${reportsUrl}/generate`, {
+  const response = await apiFetch('/reports/generate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ analysis_id: analysisId.trim(), title: title.trim(), formats: ['pdf', 'csv'] }),
   });
-  if (!response.ok) throw new Error(await parseError(response));
-  return response.json();
+  return readOkJson<ReportResponse>(response);
 }
 
 export async function getReport(reportId: string): Promise<ReportResponse> {
-  const response = await fetch(`${reportsUrl}/${encodeURIComponent(reportId)}`);
-  if (!response.ok) throw new Error(await parseError(response));
-  return response.json();
+  const response = await apiFetch(`/reports/${encodeURIComponent(reportId)}`);
+  return readOkJson<ReportResponse>(response);
 }
 
 export async function downloadReportFile(reportId: string, format: 'pdf' | 'csv' | 'geojson'): Promise<Blob> {
-  const response = await fetch(`${reportsUrl}/${encodeURIComponent(reportId)}/download?format=${format}`);
+  const response = await apiFetch(`/reports/${encodeURIComponent(reportId)}/download?format=${format}`);
   if (!response.ok) throw new Error(await parseError(response));
   return response.blob();
 }

@@ -2,9 +2,10 @@ import { useState, type FormEvent, type CSSProperties } from 'react';
 import { useExplorerStore } from '@/store';
 import type { MapLayer } from '@/types';
 import { downloadReportFile, generateReport, saveDownload } from '@/modules/reports/api';
+import { API_BASE, apiFetch, readJson } from '@/lib/api';
 import styles from './AnalysisWorkflow.module.css';
 
-const API = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '').replace(/\/v1$/, '');
+const API = API_BASE;
 type Observation = { date: string; dataset: string; dataset_id: string; image_id: string; cloud_cover: number | null };
 type LayerResult = { name: string; tile_url_template: string; visualization: { min: number; max: number; palette?: string[]; bands?: string[] } };
 type JobAccepted = { analysis_id: string; status?: string; status_url?: string; layers_url?: string };
@@ -20,12 +21,12 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   const retryable = !init?.method || init.method === 'GET';
   for (let attempt = 0; ; attempt++) {
-    const response = await fetch(url, { ...init, headers });
+    const response = await apiFetch(url, { ...init, headers });
     if (retryable && [429, 502, 503, 504].includes(response.status) && attempt < 2) {
       await new Promise(resolve => setTimeout(resolve, 800 * (attempt + 1)));
       continue;
     }
-    const body = await response.json().catch(() => ({}));
+    const body = await readJson(response);
     if (!response.ok) throw new Error(body.detail?.detail || body.detail || body.error?.detail || body.error || `Request failed (${response.status})`);
     return body as T;
   }

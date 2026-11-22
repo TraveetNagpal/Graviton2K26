@@ -50,7 +50,13 @@ export async function searchLocations(query: string, limit = 7): Promise<SearchR
   const res = await fetch(`${NOMINATIM_BASE}/search?${params}`, { headers: HEADERS });
   if (!res.ok) throw new Error(`Nominatim error: ${res.status}`);
 
-  const data: NominatimFeature[] = await res.json();
+  let data: NominatimFeature[];
+  try {
+    data = JSON.parse(await res.text());
+  } catch {
+    throw new Error('Location search returned an unreadable response. Please try again.');
+  }
+  if (!Array.isArray(data)) throw new Error('Location search returned an unexpected response.');
 
   return data.map((f): SearchResult => {
     const bb = f.boundingbox; // [south, north, west, east]
@@ -81,6 +87,10 @@ export async function reverseGeocode(
 
   const res = await fetch(`${NOMINATIM_BASE}/reverse?${params}`, { headers: HEADERS });
   if (!res.ok) return null;
-  const data = await res.json();
-  return data?.display_name ?? null;
+  try {
+    const data = JSON.parse(await res.text());
+    return data?.display_name ?? null;
+  } catch {
+    return null;
+  }
 }

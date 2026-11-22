@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useExplorerStore } from '@/store';
+import { apiFetch, readJson } from '@/lib/api';
 
-const API = String((import.meta as any).env?.VITE_API_BASE_URL || '/api').replace(/\/$/, '');
 type Monitor = { id: string; name: string; status: string; next_run_at: string; last_success_at?: string; baseline_date?: string; consecutive_failures: number; config: any };
 type Alert = { id: string; category: string; region_name: string; observation_date: string; baseline_date?: string; dataset?: string; valid_pixel_coverage_percent?: number; processed_at?: string; created_at: string; summary: string; measurement: { metric: string; value: number; unit: string; value_hectares?: number }; layer_url?: string; verification_status: string };
 
@@ -13,9 +13,9 @@ const defaults = {
 };
 
 async function request(path: string, init: RequestInit = {}) {
-  const response = await fetch(`${API}${path}`, { ...init, headers: { 'Content-Type': 'application/json', ...(init.headers || {}) } });
+  const response = await apiFetch(path, { ...init, headers: { 'Content-Type': 'application/json', ...(init.headers || {}) } });
   if (response.status === 204) return null;
-  const data = await response.json();
+  const data = await readJson(response);
   if (!response.ok) throw new Error(data.detail?.detail || data.detail || data.error || `Request failed (${response.status})`);
   return data;
 }
@@ -72,9 +72,8 @@ export default function Dashboard() {
   async function openAlertLayer(alert: Alert) {
     if (!alert.layer_url) return;
     try {
-      const root = API.replace(/\/api\/?$/, '');
-      const response = await fetch(`${root}${alert.layer_url}`);
-      const data = await response.json();
+      const response = await apiFetch(alert.layer_url);
+      const data = await readJson(response);
       if (!response.ok || !data.layers?.[0]?.tile_url_template) throw new Error(data.detail?.detail || 'Map layer is unavailable.');
       const layerId = alert.category.indexOf('vegetation') >= 0 ? 'vegetation-ndvi' : alert.category.indexOf('water') >= 0 ? 'water-analysis' : 'urban-change';
       showAnalysisLayer(layerId, data.layers.find((layer: any) => layer.name === 'change')?.tile_url_template || data.layers[0].tile_url_template);

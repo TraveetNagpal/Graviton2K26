@@ -1,12 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { useExplorerStore } from '@/store';
+import { apiFetch, apiRequest, readJson } from '@/lib/api';
 import styles from './HistoricalTimeline.module.css';
 
 type Frequency = 'daily' | 'weekly' | 'monthly' | 'quarterly';
 type Observation = { date: string; dataset: string; image_id: string; cloud_cover?: number | null };
 type Point = { date: string; image_id: string; dataset: string; status: string; value?: { value: number | null; unit: string }; valid_pixel_coverage_percent?: number; layer_url?: string; layer_name?: string; warning?: string };
 type Trend = { analysis_id: string; status: string; baseline: { date: string }; points: Point[]; quality_warnings: string[]; measurement_definition: string; missing_observation_count: number };
-const API_BASE = String((import.meta as any).env?.VITE_API_BASE_URL || '/api').replace(/\/v1\/?$/, '');
 
 function bucket(date: string, frequency: Frequency) {
   if (frequency === 'daily') return date;
@@ -46,13 +46,6 @@ function representative(images: Observation[], frequency: Frequency) {
   return [...groups.values()].map(group => group.sort((a, b) => (a.cloud_cover ?? 101) - (b.cloud_cover ?? 101))[0]).sort((a, b) => a.date.localeCompare(b.date));
 }
 
-async function post<T>(path: string, body: unknown): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.detail?.detail ?? data.detail ?? data.error ?? `Request failed (${response.status})`);
-  return data as T;
-}
-
 export default function HistoricalTimeline() {
   const selection = useExplorerStore(s => s.activeSelection);
   const showAnalysisLayer = useExplorerStore(s => s.showAnalysisLayer);
@@ -75,7 +68,7 @@ export default function HistoricalTimeline() {
     try {
       if (geometry?.type !== 'Polygon') throw new Error('Select a polygonal region on the map first.');
       if (!start || !end || end <= start) throw new Error('Choose a start date and a later exclusive end date.');
-      const result = await post<{ observations: Observation[] }>('/satellite/search', { area_of_interest: geometry, start_date: start, end_date: end, dataset, max_cloud_cover: cloud });
+      const result = await apiRequest<{ observations: Observation[] }>('/satellite/search', { method: 'POST', body: JSON.stringify({ area_of_interest: geometry, start_date: start, end_date: end, dataset, max_cloud_cover: cloud }) });
       setImages(result.observations); setBaseline(''); setHasSearched(true); setMessage(`${result.observations.length} real catalog observations found.`);
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Satellite search failed.'); }
     finally { setBusy(false); }
@@ -86,12 +79,12 @@ export default function HistoricalTimeline() {
     try {
       const point = pointById.get(image.image_id);
       if (point?.layer_url) {
-        const root = API_BASE.replace(/\/api\/?$/, '');
-        const response = await fetch(`${root}${point.layer_url}`); const data = await response.json();
+        const response = await apiFetch(point.layer_url);
+        const data = await readJson(response);
         const layer = data.layers?.find((entry: { name: string }) => entry.name === point.layer_name) ?? data.layers?.[0];
         if (layer?.tile_url_template) { showAnalysisLayer(layerId(kind), layer.tile_url_template); return; }
       }
-      const preview = await post<{ layer: { tile_url_template: string } }>('/satellite/preview', { image_id: image.image_id, dataset: image.dataset, area_of_interest: geometry });
+      const preview = await apiRequest<{ layer: { tile_url_template: string } }>('/satellite/preview', { method: 'POST', body: JSON.stringify({ image_id: image.image_id, dataset: image.dataset, area_of_interest: geometry }) });
       showAnalysisLayer(layerId(kind), preview.layer.tile_url_template);
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not load selected observation.'); }
     finally { setBusy(false); }
@@ -102,11 +95,15 @@ export default function HistoricalTimeline() {
     try {
       if (sampled.length < 2 || sampled.length > 30) throw new Error('Choose 2–30 actual observations. Use a coarser frequency or shorter date range when needed.');
       if (!baseline) throw new Error('Choose a baseline date.');
-      const accepted = await post<{ analysis_id: string }>('/analysis/trend', { analysis_type: kind, observations: sampled.map(image => ({ date: image.date, image_id: image.image_id, dataset: image.dataset })), baseline_image_id: baseline, area_of_interest: geometry });
+      const accepted = await apiRequest<{ analysis_id: string }>('/analysis/trend', { method: 'POST', body: JSON.stringify({ analysis_type: kind, observations: sampled.map(image => ({ date: image.date, image_id: image.image_id, dataset: image.dataset })), baseline_image_id: baseline, area_of_interest: geometry }) });
       let result: Trend | null = null;
       for (let i = 0; i < 150; i++) {
         await new Promise(resolve => setTimeout(resolve, 1500));
-        const response = await fetch(`${API_BASE}/analysis/${accepted.analysis_id}`); result = await response.json();
+        try {
+          result = await apiRequest<Trend>(`/analysis/${accepted.analysis_id}`);
+        } catch {
+          continue;
+        }
         setMessage(`Measuring actual observations against the selected baseline (${i + 1}/150)…`);
         if (result?.status === 'completed' || result?.status === 'failed') break;
       }
