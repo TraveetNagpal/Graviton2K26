@@ -155,4 +155,8 @@ Vercel freezes a function instance after its response, and the analysis registry
 - `/api/analysis/{id}/layers` is scoped to the instance that ran the job and may return `404` after a redeploy, cold start, or different instance. Map-layer links are best effort.
 - For durable asynchronous jobs and stable layer links, run the backend as a long-lived container (the included `Dockerfile`) on Render, Fly.io, Cloud Run, or Railway, and point `VITE_API_BASE_URL` at that service.
 
+### Frontend API connectivity and error handling
+
+All browser API calls share one helper in `src/lib/api.ts`. A production build without `VITE_API_BASE_URL` calls same-origin `/api`; set it at build time whenever the frontend is hosted separately from the API (for example on Cloudflare Workers or another static host). If the API is unreachable, blocked by CORS, or returns an empty or non-JSON body, the interface shows a descriptive message with the HTTP status and the configured API base instead of failing with an opaque `Unexpected end of JSON input` error. That message normally means the backend is not deployed at the address the frontend is calling.
+
 The root package builds with `npm run build` (Vite); run `npm run type-check` separately when changing TypeScript. The restored Next.js app under `frontend/` can alternatively be deployed as its own project with **Root Directory** `frontend/` and `NEXT_PUBLIC_API_BASE_URL=https://<backend>/api`.
