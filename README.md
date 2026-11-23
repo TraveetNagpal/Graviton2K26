@@ -155,3 +155,14 @@ Vercel freezes a function instance after its response, and the analysis registry
 All browser API calls share one helper in `src/lib/api.ts`. A production build without `VITE_API_BASE_URL` calls same-origin `/api`; set it at build time whenever the frontend is hosted separately from the API (for example on Cloudflare Workers or another static host). If the API is unreachable, blocked by CORS, or returns an empty or non-JSON body, the interface shows a descriptive message with the HTTP status and the configured API base instead of failing with an opaque `Unexpected end of JSON input` error. That message normally means the backend is not deployed at the address the frontend is calling.
 
 The root package builds with `npm run build` (Vite); run `npm run type-check` separately when changing TypeScript. The restored Next.js app under `frontend/` can alternatively be deployed as its own project with **Root Directory** `frontend/` and `NEXT_PUBLIC_API_BASE_URL=https://<backend>/api`.
+
+## Deploy the static frontend to Cloudflare Workers
+
+`wrangler.json` publishes the built Vite app as Cloudflare Workers static assets (worker name `graviton2k26`, served from `./dist`):
+
+```sh
+npm run build
+npx wrangler deploy
+```
+
+Workers serves static files only, so host the FastAPI backend separately (Vercel, the Docker stack, or another container host) and build the frontend with `VITE_API_BASE_URL` pointing at that backend's `/api` URL. Client-side routes such as `/dashboard` also need single-page-app fallback: set `"not_found_handling": "single-page-application"` under `assets` in `wrangler.json`, otherwise a deep link returns `404`.
