@@ -1,11 +1,6 @@
-This project was created for the Graviton Hackathon 2026 at CGC University, where we chose the "Space" theme.
-
-Hi, this project is for the Graviton Hackathon 2026 at CGC University. We selected the "Space" theme for this hackathon.
-
-
 # TerraMind AI — Graviton 2K26
 
-TerraMind AI is a satellite imagery analysis project for the 2026 CGC University Graviton hackathon, built with a FastAPI backend and a Vite/React frontend.
+TerraMind AI is a satellite imagery analysis project built for the 2026 CGC University Graviton hackathon, where we selected the "Space" theme. It pairs a FastAPI backend with a Vite/React frontend.
 
 ## Backend
 
