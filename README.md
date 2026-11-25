@@ -15,6 +15,7 @@ TerraMind AI is a satellite imagery analysis project built for the 2026 CGC Univ
 ## Contents
 
 - [Backend](#backend) — setup, Earth Engine credentials, satellite API
+- [Module 4: preprocessing](#module-4-preprocessing)
 - [Module 5: change detection](#module-5-change-detection)
 - [Module 6: AI Earth Investigator](#module-6-ai-earth-investigator)
 - [Module 7: historical analysis](#module-7-historical-analysis)
@@ -47,6 +48,8 @@ uvicorn app.main:app --reload
 
 - `GET /api/earth-engine/status` checks configuration and Earth Engine API access without returning credentials.
 - `POST /api/satellite/search` searches actual Earth Engine catalog observations for `sentinel-2`, `landsat`, `landsat-8` or `landsat-9`. Dates are ISO `YYYY-MM-DD`; `end_date` is exclusive. AOIs must be valid WGS84 GeoJSON Polygon/MultiPolygon geometries. Scene cloud percentage is reported as catalog metadata and does not represent cloudiness within the AOI.
+
+### Module 4: preprocessing
 
 Module 4 preprocessing lives in `backend/app/services/earth_engine/processing.py` and `local.py`. It applies Sentinel-2 SCL or Landsat Collection 2 QA_PIXEL masking, scales reflectance, standardizes common optical bands, computes AOI valid-pixel coverage, and aligns comparisons to a shared grid. The Earth Engine functions return lazy server-side images for the analysis engine; they do not transfer raster pixels through API JSON. Invalid reflectance remains masked. The NumPy local functions preserve invalid pixels as NaN and never interpret them as zero.
 
