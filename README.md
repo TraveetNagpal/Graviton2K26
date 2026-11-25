@@ -19,6 +19,15 @@ TerraMind AI is a satellite imagery analysis project built for the 2026 CGC Univ
 - `Dockerfile`, `docker-compose.yml`, `nginx.conf` — container deployment for the integrated stack.
 - `vercel.json`, `wrangler.json` — deployment configuration for Vercel services and Cloudflare Workers static assets.
 
+### Frontend routes
+
+- `/` — landing page.
+- `/explorer` — 2D/3D satellite map, change analysis, and historical timeline.
+- `/dashboard` — regional monitoring and alerts (Module 8).
+- `/reports` — report generation and history (Module 9).
+
+Unknown paths redirect to `/`.
+
 ## Contents
 
 - [Backend](#backend) — setup, Earth Engine credentials, satellite API
