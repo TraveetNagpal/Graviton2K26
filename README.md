@@ -2,6 +2,13 @@
 
 TerraMind AI is a satellite imagery analysis project built for the 2026 CGC University Graviton hackathon, where we selected the "Space" theme. It pairs a FastAPI backend with a Vite/React frontend.
 
+## Requirements
+
+- Node.js 18 or newer with npm — runs the Vite 5 frontend, type-check, and production build.
+- Python 3.12 (pinned in `.python-version`) with pip — runs the FastAPI backend and its tests.
+- PostgreSQL with PostGIS — required for the integrated stack and saved-region geometry.
+- Docker and Docker Compose — optional, for running the full stack together.
+
 ## Project layout
 
 - `src/` — Vite/React single-page app (Explorer, Dashboard, Reports, shared API helpers).
