@@ -86,13 +86,13 @@ Sentinel-2 standardized six-band output defaults to 20 m to respect its native S
 
 Run tests from `backend/` using `pytest`. Earth Engine credentials are not required for the local array QA tests. A real catalog integration check requires an authorized Earth Engine project and credentials.
 
-## Reports (Module 9)
+### Module 9: reports and exports
 
 The `/reports` page lists the workspace report history and lets you submit a source analysis ID for report generation. Configure `VITE_API_BASE_URL` to the API root (for example `http://localhost:8000/api`). The API implements `POST /reports/generate`, `GET /reports`, `GET /reports/{report_id}`, and artifact downloads. See [the API and integration contract](docs/map-integration.md#module-9--reports-and-exports) for response shape, provenance, and artifact requirements.
 
 The report service now builds PDF and CSV artifacts from completed backend analysis records. Artifact bytes are stored with the report row in PostgreSQL, so downloads keep working after restarts and on read-only serverless filesystems; `REPORT_STORAGE_DIR` is only an optional local streaming cache. The frontend does not fabricate analysis values; GeoJSON is offered only when compatible vector output exists (the current change layers are rasters, so GeoJSON is disabled).
 
-## Module 10 — local deployment
+## Module 10: local deployment
 
 The integrated application uses the existing Vite/React explorer and FastAPI backend. PostgreSQL with PostGIS stores users, saved regions, satellite observation metadata, analysis job/result metadata, monitoring configurations, alerts, and report metadata. Raster pixels remain in Earth Engine or external raster storage; reports are written to the mounted report artifact volume.
 
