@@ -28,8 +28,13 @@ TerraMind AI is a satellite imagery analysis project built for the 2026 CGC Univ
 
 Unknown paths redirect to `/`.
 
+## Documentation
+
+- [Map Integration Guide](docs/map-integration.md) — selection GeoJSON, sending selections to the backend, embedding the selection widget, displaying backend imagery, before/after imagery, reports and exports, map credentials, keyboard shortcuts, and validation rules. Interactive request schemas also live in FastAPI at `/docs`.
+
 ## Contents
 
+- [Documentation](#documentation)
 - [Backend](#backend) — setup, Earth Engine credentials, satellite API
 - [Module 4: preprocessing](#module-4-preprocessing)
 - [Module 5: change detection](#module-5-change-detection)
