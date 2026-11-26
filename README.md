@@ -2,6 +2,22 @@
 
 TerraMind AI is a satellite imagery analysis project built for the 2026 CGC University Graviton hackathon, where we selected the "Space" theme. It pairs a FastAPI backend with a Vite/React frontend.
 
+## Contents
+
+- [Requirements](#requirements)
+- [Project layout](#project-layout)
+- [Documentation](#documentation)
+- [Backend](#backend) — setup, Earth Engine credentials, satellite API
+- [Module 4: preprocessing](#module-4-preprocessing)
+- [Module 5: change detection](#module-5-change-detection)
+- [Module 6: AI Earth Investigator](#module-6-ai-earth-investigator)
+- [Module 7: historical analysis](#module-7-historical-analysis)
+- [Module 8: regional monitoring and alerts](#module-8-regional-monitoring-and-alerts)
+- [Module 9: reports and exports](#module-9-reports-and-exports)
+- [Module 10: local deployment](#module-10-local-deployment)
+- [Deploy the web app and API to Vercel](#deploy-the-web-app-and-api-to-vercel)
+- [Deploy the static frontend to Cloudflare Workers](#deploy-the-static-frontend-to-cloudflare-workers)
+
 ## Requirements
 
 - Node.js 18 or newer with npm — runs the Vite 5 frontend, type-check, and production build.
@@ -31,20 +47,6 @@ Unknown paths redirect to `/`.
 ## Documentation
 
 - [Map Integration Guide](docs/map-integration.md) — selection GeoJSON, sending selections to the backend, embedding the selection widget, displaying backend imagery, before/after imagery, reports and exports, map credentials, keyboard shortcuts, and validation rules. Interactive request schemas also live in FastAPI at `/docs`.
-
-## Contents
-
-- [Documentation](#documentation)
-- [Backend](#backend) — setup, Earth Engine credentials, satellite API
-- [Module 4: preprocessing](#module-4-preprocessing)
-- [Module 5: change detection](#module-5-change-detection)
-- [Module 6: AI Earth Investigator](#module-6-ai-earth-investigator)
-- [Module 7: historical analysis](#module-7-historical-analysis)
-- [Module 8: regional monitoring and alerts](#module-8-regional-monitoring-and-alerts)
-- [Module 9: reports and exports](#module-9-reports-and-exports)
-- [Module 10: local deployment](#module-10-local-deployment)
-- [Deploy the web app and API to Vercel](#deploy-the-web-app-and-api-to-vercel)
-- [Deploy the static frontend to Cloudflare Workers](#deploy-the-static-frontend-to-cloudflare-workers)
 
 ## Backend
 
