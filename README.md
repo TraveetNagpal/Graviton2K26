@@ -174,7 +174,7 @@ Import this repository into Vercel with the repository root as the project root,
 - `GEMINI_API_KEY` — Google AI Studio key used server-side for the Earth Investigator and report interpretations. `GEMINI_MODEL` defaults to `gemini-3.5-flash`; `GEMINI_BASE_URL` and `GEMINI_TIMEOUT_SECONDS` are optional.
 - `PERSIST_ANALYSIS_JOBS=true` so job status survives function instances.
 - `REPORT_STORAGE_DIR` is optional. Report artifacts are persisted in PostgreSQL, so no writable directory is required.
-- `MONITORING_SCHEDULER_ENABLED=false` and `MONITOR_SCHEDULER_ENABLED=false`; Vercel functions do not provide a persistent process for the in-process schedulers.
+- `MONITORING_SCHEDULER_ENABLED=false` and `MONITOR_SCHEDULER_ENABLED=false` — disable both in-process schedulers (the APScheduler trigger and the standard-library monitoring worker). Vercel functions do not provide a persistent process for either scheduler.
 - `CORS_ORIGINS` — comma-separated allowed browser origins (`*` is fine for a public demo).
 
 ### 3. Database migrations
