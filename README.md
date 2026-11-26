@@ -120,8 +120,6 @@ Monitoring run and alert records survive restart. Existing Module 5 tile layer o
 
 Sentinel-2 standardized six-band output defaults to 20 m to respect its native SWIR resolution; Landsat defaults to 30 m. Cross-sensor comparisons should use a common 30 m grid. Scene-level cloud metadata is not a substitute for AOI valid-pixel coverage, which is a clear-support proxy and not a guarantee of cloud-free pixels.
 
-Run tests from `backend/` using `pytest`. Earth Engine credentials are not required for the local array QA tests. A real catalog integration check requires an authorized Earth Engine project and credentials.
-
 ### Module 9: reports and exports
 
 The `/reports` page lists the workspace report history and lets you submit a source analysis ID for report generation. Configure `VITE_API_BASE_URL` to the API root (for example `http://localhost:8000/api`). The API implements `POST /reports/generate`, `GET /reports`, `GET /reports/{report_id}`, and artifact downloads. See [the API and integration contract](docs/map-integration.md#module-9--reports-and-exports) for response shape, provenance, and artifact requirements.
